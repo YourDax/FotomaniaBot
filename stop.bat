@@ -1,6 +1,12 @@
 @echo off
 chcp 65001 >nul
+setlocal EnableExtensions EnableDelayedExpansion
+cd /d "%~dp0"
 echo Остановка MAX Рассылок...
-for /f "tokens=2" %%P in ('tasklist /v /fo csv ^| findstr /i "\"MAX backend\""') do taskkill /PID %%~P /T /F >nul 2>&1
+if exist ".runtime\backend.pid" (
+  set /p BACKEND_PID=<".runtime\backend.pid"
+  powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$p=Get-CimInstance Win32_Process -Filter 'ProcessId=!BACKEND_PID!' -ErrorAction SilentlyContinue; if ($p -and $p.CommandLine -like '*uvicorn app.main:app*') { Stop-Process -Id !BACKEND_PID! -Force -ErrorAction SilentlyContinue }"
+  del ".runtime\backend.pid" >nul 2>&1
+)
 echo Готово.
 pause

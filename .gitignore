@@ -1,4 +1,6 @@
 # Python
+.runtime/
+releases/
 .venv/
 venv/
 __pycache__/
