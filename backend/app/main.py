@@ -26,13 +26,14 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from .db import BASE_DIR, engine, session_scope
-from .max_browser import MaxBrowserError, open_chat, prepare_message
+from .max_browser import MaxBrowserError, open_chat, prepare_message, rename_contact
 from .migrations import apply_migrations
 from .models import (
     Base,
     Campaign,
     Client,
     DeliveryTask,
+    MessageTemplate,
     School,
     SchoolClass,
     Setting,
@@ -42,6 +43,7 @@ from .phones import normalize_phone
 from .schemas import (
     CampaignDeleteIn,
     CampaignIn,
+    CampaignMessagesIn,
     ClassIn,
     ClassUpdateIn,
     ClientDeleteIn,
@@ -52,11 +54,13 @@ from .schemas import (
     ManualResultIn,
     SchoolUpdateIn,
     SettingsIn,
+    TaskMessageIn,
     TaskStatusIn,
 )
 from .security import hash_password, require_auth
 from .services import (
     client_dict,
+    contact_first_name,
     csv_safe,
     detect_header_row,
     render_message,
@@ -544,6 +548,34 @@ def _campaign_template(campaign: Campaign, role: str) -> str:
     return template or ""
 
 
+MESSAGE_EDITABLE_STATUSES = frozenset({"PENDING", "REQUIRES_REVIEW", "CONTACT_NOT_FOUND", "MAX_ERROR"})
+MESSAGE_ROLES = frozenset({"KR", "RK"})
+MAX_TEMPLATES_PER_ROLE = 100
+
+
+def _remember_template(session: Any, role: str, body: str | None) -> None:
+    """Сохраняет использованный текст рассылки для роли; дубликаты не создаются."""
+    text = (body or "").strip()
+    if not text:
+        return
+    template = session.scalar(
+        select(MessageTemplate).where(MessageTemplate.role == role, MessageTemplate.body == text)
+    )
+    if template is None:
+        session.add(MessageTemplate(role=role, body=text))
+    else:
+        template.updated_at = now()
+
+
+def template_dict(template: MessageTemplate) -> dict[str, Any]:
+    return {
+        "id": template.id,
+        "role": template.role,
+        "body": template.body,
+        "updated_at": template.updated_at,
+    }
+
+
 def campaign_dict(campaign: Campaign, tasks: list[DeliveryTask]) -> dict[str, Any]:
     statuses: dict[str, int] = {}
     for task in tasks:
@@ -660,6 +692,8 @@ def create_campaign(data: CampaignIn, _: bool = Depends(require_auth)) -> dict[s
                     status="PENDING",
                 )
             )
+        _remember_template(session, "KR", data.message_kr)
+        _remember_template(session, "RK", data.message_rk)
         session.commit()
         session.refresh(campaign)
         return campaign_dict(campaign, [])
@@ -747,6 +781,63 @@ def delete_campaigns(data: CampaignDeleteIn, _: bool = Depends(require_auth)) ->
         session.commit()
     return {"deleted": deleted}
 
+
+
+@app.get("/api/message-templates/{role}")
+def list_message_templates(role: str, _: bool = Depends(require_auth)) -> list[dict[str, Any]]:
+    if role not in MESSAGE_ROLES:
+        raise HTTPException(400, "Роль должна быть KR или RK")
+    with session_scope() as session:
+        templates = session.scalars(
+            select(MessageTemplate)
+            .where(MessageTemplate.role == role)
+            .order_by(MessageTemplate.updated_at.desc(), MessageTemplate.id.desc())
+            .limit(MAX_TEMPLATES_PER_ROLE)
+        ).all()
+        return [template_dict(item) for item in templates]
+
+
+@app.patch("/api/campaigns/{campaign_id}/messages")
+def update_campaign_messages(
+    campaign_id: int, data: CampaignMessagesIn, _: bool = Depends(require_auth)
+) -> dict[str, Any]:
+    message_kr = (data.message_kr or "").strip() or None
+    message_rk = (data.message_rk or "").strip() or None
+    if message_kr is None and message_rk is None:
+        raise HTTPException(422, "Укажите текст хотя бы для одной роли")
+    with session_scope() as session:
+        campaign = session.get(Campaign, campaign_id)
+        if campaign is None:
+            raise HTTPException(404, "Кампания не найдена")
+        campaign.message_kr = message_kr
+        campaign.message_rk = message_rk
+        campaign.message = message_kr or message_rk or ""
+        _remember_template(session, "KR", message_kr)
+        _remember_template(session, "RK", message_rk)
+        rows = session.execute(
+            select(DeliveryTask, Client)
+            .join(Client, Client.id == DeliveryTask.client_id)
+            .where(DeliveryTask.campaign_id == campaign_id)
+        ).all()
+        updated = skipped = 0
+        for task, contact in rows:
+            if task.status not in MESSAGE_EDITABLE_STATUSES:
+                skipped += 1
+                continue
+            rendered = render_message(_campaign_template(campaign, contact.role), contact)
+            if rendered != task.rendered_message:
+                task.rendered_message = rendered
+                task.browser_prepared_at = None
+                updated += 1
+        session.commit()
+        tasks = session.scalars(
+            select(DeliveryTask).where(DeliveryTask.campaign_id == campaign_id)
+        ).all()
+        return {
+            "updated": updated,
+            "skipped": skipped,
+            "campaign": campaign_dict(campaign, list(tasks)),
+        }
 
 
 def _rows_from_upload(filename: str, raw: bytes) -> list[list[Any]]:
@@ -1074,6 +1165,60 @@ def open_max_task(task_id: int, _: bool = Depends(require_auth)) -> dict[str, An
             task.opened_at = now()
             session.commit()
     return {"status": result.status, "page_url": result.page_url, "client": result.client_name}
+
+
+@app.post("/api/tasks/{task_id}/rename-max")
+def rename_max_task(task_id: int, _: bool = Depends(require_auth)) -> dict[str, Any]:
+    with session_scope() as session:
+        task, contact = _task_and_contact(session, task_id)
+        if not contact.phone:
+            raise HTTPException(502, "У контакта не указан номер телефона для поиска в MAX")
+        school = session.get(School, contact.school_id) if contact.school_id else None
+        school_class = session.get(SchoolClass, contact.class_id) if contact.class_id else None
+        try:
+            first_name = contact_first_name(
+                task.recipient_role,
+                school.name if school else "",
+                school_class.name if school_class else "",
+                contact.name,
+                now().astimezone().year,
+            )
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        client_name = contact.name
+        identity = contact.phone
+    try:
+        result = rename_contact(client_name, identity, first_name)
+    except MaxBrowserError as exc:
+        with session_scope() as session:
+            failed = session.get(DeliveryTask, task_id)
+            if failed is not None:
+                failed.browser_error = str(exc)
+                session.commit()
+        raise HTTPException(502, str(exc)) from exc
+    return {
+        "status": result.status,
+        "client": result.client_name,
+        "first_name": result.first_name,
+    }
+
+
+@app.patch("/api/tasks/{task_id}/message")
+def update_task_message(
+    task_id: int, data: TaskMessageIn, _: bool = Depends(require_auth)
+) -> dict[str, Any]:
+    text = data.message.strip()
+    if not text:
+        raise HTTPException(422, "Текст сообщения не может быть пустым")
+    with session_scope() as session:
+        task, _contact = _task_and_contact(session, task_id)
+        if task.status not in MESSAGE_EDITABLE_STATUSES:
+            raise HTTPException(409, "Текст можно менять только у необработанных заданий")
+        if text != task.rendered_message:
+            task.rendered_message = text
+            task.browser_prepared_at = None
+        session.commit()
+        return {"id": task.id, "message": task.rendered_message, "status": task.status}
 
 
 @app.post("/api/tasks/{task_id}/opened")

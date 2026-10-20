@@ -266,11 +266,13 @@
               <div class="field">
                 <span>Текст для КР <span class="req">*</span></span>
                 <textarea id="messageKR" placeholder="Здравствуйте, {name}! Напоминаю о собрании 15 сентября в 18:00." maxlength="4000"></textarea>
+                <select id="templateSelectKR" aria-label="Сохранённые тексты для КР" style="margin-top:6px"><option value="">Сохранённые тексты…</option></select>
                 <small class="muted"><span id="msgCounterKR">0</span> / 4000 символов · доступна подстановка {name}</small>
               </div>
               <div class="field">
                 <span>Текст для РК <span class="req">*</span></span>
                 <textarea id="messageRK" placeholder="Здравствуйте, {name}! Просьба передать информацию родителям класса." maxlength="4000"></textarea>
+                <select id="templateSelectRK" aria-label="Сохранённые тексты для РК" style="margin-top:6px"><option value="">Сохранённые тексты…</option></select>
                 <small class="muted"><span id="msgCounterRK">0</span> / 4000 символов · доступна подстановка {name}</small>
               </div>
             </div>
@@ -352,6 +354,7 @@
               <label class="check muted"><input type="checkbox" id="autoRefreshToggle" checked> автообновление</label>
               <button type="button" class="btn small ghost" id="taskRefreshBtn">Обновить</button>
               <a class="btn small ghost" id="taskExportLink" href="#" target="_blank" rel="noopener">Скачать CSV</a>
+              <button type="button" class="btn small ghost" id="taskEditMessagesBtn" title="Изменить тексты КР и РК для всех необработанных заданий">Изменить тексты</button>
               <button type="button" class="btn small danger" id="taskStopBtn">Остановить рассылку</button>
             </div>
             <dl class="kv" style="margin-bottom:12px">
@@ -412,7 +415,7 @@
                   <thead>
                     <tr>
                       <th>Получатель</th><th>Школа</th><th>Класс</th><th>Роль</th>
-                      <th>MAX</th><th>Статус</th><th>Результат</th>
+                      <th>MAX</th><th>Статус</th><th>Результат</th><th>Действия</th>
                     </tr>
                   </thead>
                   <tbody id="taskRows"></tbody>
@@ -519,6 +522,6 @@
     <div class="modal-foot" id="modalFoot"></div>
   </dialog>
 
-  <script src="/static/app.js?v=20261020-classes" defer></script>
+  <script src="/static/app.js?v=20261020-campaign-templates" defer></script>
 </body>
 </html>

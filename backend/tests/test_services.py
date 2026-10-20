@@ -1,8 +1,11 @@
 """Unit tests for pure helpers in app.services."""
 
+import pytest
+
 from app.models import Client
 from app.services import (
     client_dict,
+    contact_first_name,
     csv_safe,
     detect_header_row,
     normalized_header,
@@ -66,3 +69,40 @@ def test_client_dict_parses_custom_fields_json():
 
 def test_client_dict_survives_invalid_custom_fields():
     assert client_dict(_client(custom_fields="oops"))["custom_fields"] == {}
+
+
+def test_contact_first_name_drops_surname_and_adds_school_class_year():
+    name = contact_first_name("KR", "Школа 5", "5А", "Иванов Иван Иванович", 2026)
+    assert name == "КР Школа 5 5А - 2026 Иван Иванович"
+
+
+def test_contact_first_name_keeps_name_and_patronymic_without_surname():
+    name = contact_first_name("KR", "Школа 5", "5А", "Ольга Юрьевна", 2026)
+    assert name == "КР Школа 5 5А - 2026 Ольга Юрьевна"
+
+
+def test_contact_first_name_matches_approved_example():
+    name = contact_first_name("RK", "М_36", "7Д", "Петрова Екатерина Ивановна", 2026)
+    assert name == "РК М_36 7Д - 2026 Екатерина Ивановна"
+
+
+def test_contact_first_name_uses_rk_prefix_for_parents():
+    name = contact_first_name("RK", "Лицей 1", "1Б", "Петрова Анна", 2026)
+    assert name == "РК Лицей 1 1Б - 2026 Анна"
+
+
+def test_contact_first_name_requires_school_and_class():
+    with pytest.raises(ValueError):
+        contact_first_name("KR", "", "5А", "Иванов Иван", 2026)
+    with pytest.raises(ValueError):
+        contact_first_name("KR", "Школа 5", "  ", "Иванов Иван", 2026)
+
+
+def test_contact_first_name_rejects_names_over_max_length():
+    with pytest.raises(ValueError):
+        contact_first_name("KR", "Ш" * 60, "5А", "Иванов Иван", 2026)
+
+
+def test_contact_first_name_rejects_unknown_role():
+    with pytest.raises(ValueError):
+        contact_first_name("XX", "Школа 5", "5А", "Иванов Иван", 2026)

@@ -510,3 +510,199 @@ def prepare_message(client_name: str, identity: str, message: str | None) -> Pre
 
 def open_chat(client_name: str, identity: str) -> PreparationResult:
     return prepare_message(client_name, identity, None)
+
+
+CHAT_EDITOR_SELECTORS: list[str] = [
+    "textarea",
+    "[contenteditable='true']",
+    "[role='textbox']",
+    "[data-testid*='message']",
+    "[class*='composer'] [contenteditable='true']",
+    "[class*='input'] [contenteditable='true']",
+]
+
+
+@dataclass
+class RenameResult:
+    status: str
+    page_url: str
+    client_name: str
+    first_name: str
+
+
+def _connect_max_page(playwright: Any, cdp_url: str) -> Any:
+    _ensure_cdp_endpoint(playwright, cdp_url)
+    try:
+        browser = playwright.chromium.connect_over_cdp(cdp_url)
+    except Exception as exc:
+        raise MaxBrowserError(
+            f"Не удалось подключиться к уже запущенному Chromium через {cdp_url}. "
+            "Запустите Chromium с remote debugging и задайте MAX_CDP_URL."
+        ) from exc
+    pages = [
+        candidate
+        for context in browser.contexts
+        for candidate in context.pages
+        if "max" in candidate.url.casefold()
+    ]
+    if not pages:
+        raise MaxBrowserError("В подключённом браузере нет открытой вкладки MAX.")
+    page = None
+    deadline = time.monotonic() + 20
+    while time.monotonic() < deadline and page is None:
+        page = next((candidate for candidate in pages if _page_has_controls(candidate)), None)
+        if page is None:
+            time.sleep(0.5)
+    page = page or pages[0]
+    log.info("MAX: выбрана вкладка MAX %s", page.url)
+    return page
+
+
+def _open_chat_for_rename(page: Any, phone: str) -> None:
+    _return_to_main_screen(page)
+    search = _open_phone_search(page)
+    digits = _max_phone_digits(phone)
+    if not digits:
+        raise MaxBrowserError("Номер телефона клиента не содержит цифр.")
+    search.fill("")
+    search.fill(digits)
+    search.press("Enter")
+    log.info("MAX: номер отправлен для поиска контакта, ожидаю открытие чата")
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if _phone_not_found_popup_text(page):
+            log.warning("MAX: контакт не найден, переименование невозможно")
+            _log_page_state(page, "rename-contact-not-found")
+            _dismiss_phone_not_found_popup(page)
+            raise MaxBrowserError("Контакт не найден в MAX по указанному номеру телефона.")
+        if _first_visible(page, CHAT_EDITOR_SELECTORS) is not None:
+            log.info("MAX: чат открыт для переименования контакта")
+            return
+        page.wait_for_timeout(250)
+    _log_page_state(page, "rename-chat-not-opened")
+    raise MaxBrowserError("После поиска по номеру не удалось открыть чат в MAX.")
+
+
+def _open_profile_editor(page: Any) -> tuple[Any, bool]:
+    """Open the contact form. Returns (first_name_input, add_mode).
+
+    add_mode is True for «В контакты» (new contact, needs «Сохранить»);
+    False for «Редактировать» (existing contact, no save button).
+    """
+    avatar = _first_visible_locator(page, [page.locator("button[aria-label^='Открыть профиль']")])
+    if avatar is None:
+        _log_page_state(page, "rename-avatar-not-found")
+        raise MaxBrowserError("В открытом чате не найден аватар для открытия профиля.")
+    log.info("MAX: открываю профиль клиента")
+    avatar.click()
+    page.wait_for_timeout(500)
+    add_button = _first_visible_locator(
+        page, [page.get_by_role("button", name=re.compile(r"В контакты"))]
+    )
+    add_mode = add_button is not None
+    if add_button is not None:
+        log.info("MAX: найдена кнопка «В контакты», добавляю контакт")
+        add_button.click()
+    else:
+        edit_button = _first_visible_locator(
+            page,
+            [
+                page.get_by_role("button", name=re.compile(r"Редактировать")),
+                page.locator("button[aria-label='Показать настройки']"),
+            ],
+        )
+        if edit_button is None:
+            _log_page_state(page, "rename-edit-button-not-found")
+            raise MaxBrowserError(
+                "В профиле клиента не найдена кнопка «В контакты» или редактирования."
+            )
+        log.info("MAX: открываю редактирование контакта")
+        edit_button.click()
+    first_name_input = page.locator("input[name='firstName']").first
+    first_name_input.wait_for(state="visible", timeout=10000)
+    return first_name_input, add_mode
+
+
+def _save_contact_name(
+    page: Any, first_name_input: Any, first_name: str, add_mode: bool
+) -> bool:
+    """Apply the new name. Returns False when MAX shows no «Сохранить» (name already correct)."""
+    last_name_input = _first_visible_locator(page, [page.locator("input[name='lastName']")])
+    if last_name_input is None:
+        _log_page_state(page, "rename-last-name-not-found")
+        raise MaxBrowserError("В форме контакта не найдено поле «Фамилия».")
+    first_name_input.fill(first_name)
+    last_name_input.fill("")
+    if first_name_input.input_value() != first_name or last_name_input.input_value() != "":
+        raise MaxBrowserError("MAX не принял введённые имя и фамилию. Изменения не сохранены.")
+    page.wait_for_timeout(600)
+    save_button = _first_visible_locator(
+        page,
+        [
+            page.get_by_role("button", name=re.compile(r"^\s*(Сохранить|Готово)\s*$")),
+            page.locator("button[aria-label='Сохранить']"),
+        ],
+    )
+    if save_button is None:
+        if add_mode:
+            _log_page_state(page, "rename-save-button-not-found")
+            raise MaxBrowserError("В форме нового контакта не появилась кнопка «Сохранить».")
+        log.info("MAX: «Сохранить» не появилось, имя контакта уже корректно")
+        return False
+    log.info("MAX: сохраняю новое имя контакта")
+    save_button.click()
+    page.wait_for_timeout(800)
+    return True
+
+
+def _reload_page(page: Any) -> None:
+    """Return from the contact form to the chat by reloading the MAX page."""
+    log.info("MAX: обновляю страницу, чтобы вернуться в чат")
+    page.reload(wait_until="domcontentloaded", timeout=20000)
+    page.wait_for_timeout(1500)
+    if _first_visible(page, CHAT_EDITOR_SELECTORS) is None:
+        log.warning("MAX: после обновления поле сообщения чата не найдено url=%s", page.url)
+
+
+def rename_contact(client_name: str, identity: str, first_name: str) -> RenameResult:
+    """Rename a MAX contact found by phone. Never sends or edits chat messages."""
+    try:
+        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+        from playwright.sync_api import sync_playwright
+    except ImportError as exc:
+        raise MaxBrowserError(
+            "Для управления браузером установите зависимости из backend\\requirements.txt"
+        ) from exc
+
+    cdp_url = os.getenv("MAX_CDP_URL", "http://127.0.0.1:9222").strip()
+    try:
+        with sync_playwright() as playwright:
+            log.info("MAX rename.start cdp_url=%s client=%s", cdp_url, client_name)
+            page = _connect_max_page(playwright, cdp_url)
+            _open_chat_for_rename(page, identity)
+            first_name_input, add_mode = _open_profile_editor(page)
+            changed = _save_contact_name(page, first_name_input, first_name, add_mode)
+            _reload_page(page)
+            status = "CONTACT_RENAMED" if changed else "ALREADY_CORRECT"
+            log.info("MAX: переименование для %s, статус=%s", client_name, status)
+            return RenameResult(
+                status=status,
+                page_url=page.url,
+                client_name=client_name,
+                first_name=first_name,
+            )
+    except MaxBrowserError:
+        log.exception("MAX rename failed client=%s", client_name)
+        raise
+    except PlaywrightTimeoutError as exc:
+        log.exception("MAX rename Playwright timeout client=%s", client_name)
+        raise MaxBrowserError(
+            "MAX не успел отобразить форму контакта. Повторите переименование вручную."
+        ) from exc
+    except Exception as exc:
+        log.exception("MAX rename unexpected error client=%s", client_name)
+        raise MaxBrowserError(
+            "Ошибка автоматизации MAX при переименовании. "
+            "Подробности записаны в журнале backend."
+        ) from exc
+

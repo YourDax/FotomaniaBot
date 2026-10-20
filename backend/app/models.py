@@ -22,6 +22,7 @@ __all__ = [
     "Campaign",
     "Client",
     "DeliveryTask",
+    "MessageTemplate",
     "School",
     "SchoolClass",
     "Setting",
@@ -136,4 +137,20 @@ class DeliveryTask(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     campaign: Mapped[Campaign] = relationship(back_populates="tasks")
+
+
+class MessageTemplate(Base):
+    """Использованный текст рассылки для одной роли (КР или РК), хранится без персональных данных."""
+
+    __tablename__ = "message_templates"
+    __table_args__ = (
+        UniqueConstraint("role", "body", name="uq_message_template_role_body"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    role: Mapped[str] = mapped_column(String(10), index=True)
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=now, onupdate=now
+    )
 

@@ -39,6 +39,7 @@
   ];
   const DONE_STATUSES = ['SENT', 'FAILED', 'CANCELLED'];
   const BAD_STATUSES = ['FAILED', 'CANCELLED', 'CONTACT_NOT_FOUND', 'MAX_ERROR'];
+  const EDITABLE_TASK_STATUSES = ['PENDING', 'REQUIRES_REVIEW', 'CONTACT_NOT_FOUND', 'MAX_ERROR'];
 
   const statusName = (code) => STATUS_NAMES[code] || code || '—';
   const statusTone = (code) =>
@@ -82,6 +83,7 @@
     campaigns: [],
     campaign: null,
     tasks: [],
+    templates: { KR: [], RK: [] },
     route: 'home',
     busy: false,
     prefs: { theme: 'light', refreshMs: 5000, pageSize: 50, collapsed: [] },
@@ -457,6 +459,7 @@
     if (target === 'campaigns') {
       loadContacts().catch(() => {});
       loadCampaigns().catch((error) => toast(error.message, 'error'));
+      loadMessageTemplates().catch(() => {});
     }
     if (target === 'home') refreshDashboard().catch(() => {});
     if (target === 'settings') loadSettings().catch((error) => toast(error.message, 'error'));
@@ -1618,6 +1621,7 @@
         }),
       });
       toast(`Рассылка создана. Заданий: ${created.task_count}`);
+      await loadMessageTemplates().catch(() => {});
       $('campaignName').value = '';
       $('campaignDescription').value = '';
       $('messageKR').value = '';
@@ -1690,6 +1694,142 @@
     S.campaignsUi.selected.clear();
     await loadCampaigns();
     toast(`Удалено рассылок: ${result.deleted}`);
+  }
+
+  // --- Сохранённые тексты рассылок (КР и РК раздельно) ---------------------------
+
+  const TEMPLATE_SELECTS = { KR: 'templateSelectKR', RK: 'templateSelectRK' };
+  const TEMPLATE_TEXTAREAS = { KR: 'messageKR', RK: 'messageRK' };
+
+  const fetchMessageTemplates = (role) => api(`/message-templates/${role}`);
+
+  async function loadMessageTemplates() {
+    const [kr, rk] = await Promise.all([
+      fetchMessageTemplates('KR'),
+      fetchMessageTemplates('RK'),
+    ]);
+    S.templates = { KR: kr, RK: rk };
+    renderTemplateSelect('KR');
+    renderTemplateSelect('RK');
+    return S.templates;
+  }
+
+  function renderTemplateSelect(role) {
+    const select = $(TEMPLATE_SELECTS[role]);
+    if (!select) return;
+    const items = (S.templates && S.templates[role]) || [];
+    select.innerHTML = '<option value="">Сохранённые тексты…</option>' + items
+      .map((item) => {
+        const preview = item.body.replace(/\s+/g, ' ').slice(0, 70);
+        return `<option value="${item.id}">${esc(preview)}${item.body.length > 70 ? '…' : ''}</option>`;
+      })
+      .join('');
+    select.disabled = items.length === 0;
+  }
+
+  function applyTemplate(role, id) {
+    const items = (S.templates && S.templates[role]) || [];
+    const item = items.find((entry) => entry.id === Number(id));
+    if (!item) return;
+    const textarea = $(TEMPLATE_TEXTAREAS[role]);
+    textarea.value = item.body;
+    $('msgCounter' + role).textContent = String(item.body.length);
+    toast(`Текст для ${role === 'KR' ? 'КР' : 'РК'} подставлен из сохранённых`);
+  }
+
+  // --- Редактирование текста уже созданной рассылки ----------------------------
+
+  function openCampaignMessagesDialog() {
+    const campaign = S.campaign;
+    if (!campaign) return;
+    const templates = S.templates || { KR: [], RK: [] };
+    const options = (role) => (templates[role] || [])
+      .map((item) => {
+        const preview = item.body.replace(/\s+/g, ' ').slice(0, 70);
+        return `<option value="${item.id}">${esc(preview)}${item.body.length > 70 ? '…' : ''}</option>`;
+      })
+      .join('');
+    const field = (role, label, value) => `
+      <div class="field" style="margin-bottom:12px">
+        <span>${label}</span>
+        <select data-tpl-for="${role}" aria-label="Сохранённые тексты для ${role === 'KR' ? 'КР' : 'РК'}">
+          <option value="">Сохранённые тексты…</option>${options(role)}
+        </select>
+        <textarea id="editMessage${role}" maxlength="4000" placeholder="Здравствуйте, {name}!">${esc(value || '')}</textarea>
+        <small class="muted">до 4000 символов · подстановка {name}</small>
+      </div>`;
+    openModal({
+      title: 'Изменить тексты рассылки',
+      body: `
+        <p class="muted" style="margin:0 0 12px">Изменения применятся ко всем заданиям, которые ещё не обработаны. Отправленные, неуспешные и отменённые задания не меняются. Персональные правки отдельных получателей будут перезаписаны.</p>
+        ${field('KR', 'Текст для КР', campaign.message_kr)}
+        ${field('RK', 'Текст для РК', campaign.message_rk)}`,
+      confirmText: 'Применить ко всем',
+      onReady: () => {
+        qa('[data-tpl-for]').forEach((select) => {
+          const role = select.dataset.tplFor;
+          select.addEventListener('change', () => {
+            const item = (templates[role] || []).find((entry) => entry.id === Number(select.value));
+            if (item) $('editMessage' + role).value = item.body;
+          });
+        });
+      },
+      onSubmit: async () => {
+        const kr = ($('editMessageKR').value || '').trim();
+        const rk = ($('editMessageRK').value || '').trim();
+        if (!kr && !rk) {
+          toast('Заполните текст хотя бы для одной роли', 'warn');
+          return false;
+        }
+        const result = await api(`/campaigns/${campaign.id}/messages`, {
+          method: 'PATCH',
+          body: JSON.stringify({ message_kr: kr || null, message_rk: rk || null }),
+        });
+        await loadMessageTemplates().catch(() => {});
+        await refreshTasks();
+        toast(`Тексты обновлены. Изменено заданий: ${result.updated}, пропущено обработанных: ${result.skipped}`);
+        return true;
+      },
+    });
+  }
+
+  function openTaskMessageDialog(taskId) {
+    const task = S.tasks.find((item) => item.id === taskId);
+    if (!task) return;
+    if (!EDITABLE_TASK_STATUSES.includes(task.status)) {
+      toast('Текст можно менять только у необработанных заданий', 'warn');
+      return;
+    }
+    openModal({
+      title: `Текст для ${task.client}`,
+      body: `
+        <p class="muted" style="margin:0 0 10px">Правка касается только этого получателя. Черновик в MAX придётся подготовить заново.</p>
+        <div class="field">
+          <span>Текст сообщения <span class="req">*</span></span>
+          <textarea id="editTaskMessage" maxlength="4000">${esc(task.message || '')}</textarea>
+          <small class="muted"><span id="editTaskCounter">${(task.message || '').length}</span> / 4000 символов</small>
+        </div>`,
+      confirmText: 'Сохранить текст',
+      onReady: () => {
+        $('editTaskMessage').addEventListener('input', () => {
+          $('editTaskCounter').textContent = String($('editTaskMessage').value.length);
+        });
+      },
+      onSubmit: async () => {
+        const text = ($('editTaskMessage').value || '').trim();
+        if (!text) {
+          toast('Текст сообщения не может быть пустым', 'warn');
+          return false;
+        }
+        await api(`/tasks/${taskId}/message`, {
+          method: 'PATCH',
+          body: JSON.stringify({ message: text }),
+        });
+        toast('Текст задания обновлён');
+        await refreshTasks();
+        return true;
+      },
+    });
   }
 
   // --- Задания рассылки -------------------------------------------------------
@@ -1813,8 +1953,12 @@
               ? `<span class="badge ${task.operator_result === 'sent' ? 'ok' : task.operator_result === 'failed' ? 'err' : 'mute'}">${esc(statusName(task.status))}</span>`
               : '<span class="muted">не подтверждено</span>'}
           </td>
+          <td>
+            <button type="button" class="btn small ghost" data-action="task-rename" data-id="${task.id}" title="Имя по шаблону, фамилия очищается">Переименовать в MAX</button>
+          </td>
+
         </tr>`).join('')
-      : '<tr><td colspan="7" class="empty">Заданий по текущему фильтру нет.</td></tr>';
+      : '<tr><td colspan="8" class="empty">Заданий по текущему фильтру нет.</td></tr>';
 
     qa('[data-task-row]', $('taskRows')).forEach((row) => {
       row.addEventListener('click', (event) => {
@@ -1868,6 +2012,8 @@
         <button type="button" class="btn small primary" data-action="task-prepare" data-id="${task.id}">Подготовить в MAX</button>
         <button type="button" class="btn small ghost" data-action="task-open" data-id="${task.id}">Открыть чат</button>
         <button type="button" class="btn small ghost" data-action="task-copy" data-id="${task.id}">Копировать текст</button>
+        ${EDITABLE_TASK_STATUSES.includes(task.status) ? `<button type="button" class="btn small ghost" data-action="task-edit-message" data-id="${task.id}">Изменить текст</button>` : ''}
+        <button type="button" class="btn small ghost" data-action="task-rename" data-id="${task.id}" title="Имя по шаблону, фамилия очищается">Переименовать в MAX</button>
       </div>
       <h3>Текст сообщения</h3>
       <pre class="message">${esc(task.message || 'Текст не сформирован: в рассылке нет шаблона для этой роли.')}</pre>
@@ -1949,6 +2095,32 @@
       $('taskLastError').textContent = error.message;
       toast(error.message, 'error');
     } finally {
+      await refreshTasks();
+    }
+  }
+
+  async function renameTaskContact(taskId) {
+    const button = qa('[data-action="task-rename"]').find((node) => Number(node.dataset.id) === taskId);
+    if (button) {
+      button.setAttribute('aria-busy', 'true');
+      button.disabled = true;
+    }
+    try {
+      const result = await api(`/tasks/${taskId}/rename-max`, { method: 'POST' });
+      if (result.status === 'ALREADY_CORRECT') {
+        toast('Имя контакта в MAX уже корректно, изменений не потребовалось. Страница обновлена.');
+      } else {
+        toast('Контакт переименован в MAX по шаблону. Фамилия очищена.');
+      }
+      $('taskLastError').textContent = 'последнее переименование: успех';
+    } catch (error) {
+      $('taskLastError').textContent = error.message;
+      toast(error.message, 'error');
+    } finally {
+      if (button) {
+        button.removeAttribute('aria-busy');
+        button.disabled = false;
+      }
       await refreshTasks();
     }
   }
@@ -2155,8 +2327,10 @@
     'campaign-export': (id) => window.open(`/api/reports/${id}/export`, '_blank', 'noopener'),
     'task-prepare': (id) => prepareTask(id),
     'task-open': (id) => openTaskChat(id),
+    'task-rename': (id) => renameTaskContact(id),
     'task-copy': (id) => copyToClipboard((currentTask() || {}).message || ''),
     'task-confirm': (id) => confirmTaskResult(id),
+    'task-edit-message': (id) => openTaskMessageDialog(id),
     'check-health': () => checkHealth(),
     'refresh-campaigns': () => loadCampaigns().then(() => toast('Список рассылок обновлён')),
   };
@@ -2298,6 +2472,12 @@
       renderPicker();
     });
     $('campaignPreviewBtn').addEventListener('click', previewCampaign);
+    ['KR', 'RK'].forEach((role) => {
+      $(TEMPLATE_SELECTS[role]).addEventListener('change', (event) => {
+        applyTemplate(role, event.target.value);
+        event.target.value = '';
+      });
+    });
     $('campaignCreateBtn').addEventListener('click', () => createCampaign().catch((error) => toast(error.message, 'error')));
     ['messageKR', 'messageRK'].forEach((id) => {
       $(id).addEventListener('input', () => {
@@ -2337,6 +2517,7 @@
     $('taskBack').addEventListener('click', () => go('campaigns'));
     $('taskRefreshBtn').addEventListener('click', () => refreshTasks().then(() => toast('Статусы обновлены')).catch((error) => toast(error.message, 'error')));
     $('taskStopBtn').addEventListener('click', () => stopCampaign(S.tasksUi.campaignId).catch((error) => toast(error.message, 'error')));
+    $('taskEditMessagesBtn').addEventListener('click', () => openCampaignMessagesDialog());
     $('taskSearch').addEventListener('input', debounce(() => {
       S.tasksUi.q = $('taskSearch').value.trim();
       S.tasksUi.page = 1;

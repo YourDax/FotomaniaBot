@@ -81,3 +81,44 @@ def client_dict(client: Client) -> dict[str, Any]:
     except (ValueError, TypeError):
         custom = {}
     return {**{key: getattr(client, key) for key in fields}, "custom_fields": custom}
+
+
+ROLE_PREFIXES: dict[str, str] = {"KR": "КР", "RK": "РК"}
+CONTACT_NAME_MAX_LENGTH = 64
+PATRONYMIC_SUFFIXES: tuple[str, ...] = ("вна", "вич", "ична", "ич")
+
+
+def contact_first_name(
+    role: str, school: str, class_name: str, full_name: str, year: int
+) -> str:
+    """Build the MAX contact first name ``РК|КР Школа Класс - Год Имя Отчество``.
+
+    The surname (first word of ФИО) is dropped here; the surname field itself
+    is cleared separately by the browser automation.
+    """
+    prefix = ROLE_PREFIXES.get(role)
+    if prefix is None:
+        raise ValueError(f"Неизвестная роль получателя: {role}")
+    school_part = " ".join(school.split())
+    class_part = " ".join(class_name.split())
+    if not school_part or not class_part:
+        raise ValueError("Для переименования контакта нужны школа и класс")
+    words = full_name.split()
+    if len(words) >= 3:
+        given = " ".join(words[1:])
+    elif len(words) == 2 and words[1].casefold().endswith(PATRONYMIC_SUFFIXES):
+        given = " ".join(words)
+    elif len(words) == 2:
+        given = words[1]
+    else:
+        given = " ".join(words)
+    if not given:
+        raise ValueError("В ФИО клиента нет имени для переименования")
+    result = f"{prefix} {school_part} {class_part} - {year} {given}"
+    if len(result) > CONTACT_NAME_MAX_LENGTH:
+        raise ValueError(
+            f"Имя контакта длиннее {CONTACT_NAME_MAX_LENGTH} символов: "
+            "сократите название школы или ФИО"
+        )
+    return result
+

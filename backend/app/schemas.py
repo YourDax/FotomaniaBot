@@ -38,6 +38,15 @@ class CampaignIn(BaseModel):
     school_id: int | None = None
 
 
+class CampaignMessagesIn(BaseModel):
+    message_kr: str | None = Field(default=None, max_length=4000)
+    message_rk: str | None = Field(default=None, max_length=4000)
+
+
+class TaskMessageIn(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+
+
 class ImportConfirm(BaseModel):
     rows: list[dict[str, Any]]
     mapping: dict[str, str] = Field(default_factory=dict)
