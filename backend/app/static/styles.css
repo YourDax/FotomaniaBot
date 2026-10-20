@@ -237,6 +237,44 @@ textarea { min-height: 104px; resize: vertical; font-size: 14px; }
 .badge.warn { background: var(--warn-soft); color: var(--warn); }
 .badge.mute { background: var(--panel-2); color: var(--muted); }
 
+/* Сворачивание школ и классов */
+.collapse-head { margin-bottom: 10px; }
+.collapse-body { min-width: 0; }
+.is-collapsed > .collapse-head { margin-bottom: 0; }
+
+.collapse-toggle {
+  flex: 0 0 auto; width: 24px; height: 24px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 6px; background: transparent; color: var(--muted);
+  cursor: pointer; font: inherit; transition: background .15s ease, color .15s ease;
+}
+.collapse-toggle:hover { background: var(--panel-2); color: var(--brand); }
+.collapse-toggle:focus-visible { outline: none; box-shadow: var(--focus); }
+.collapse-toggle::before {
+  content: ""; width: 7px; height: 7px; margin-top: -2px;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: rotate(45deg); transition: transform .15s ease;
+}
+.is-collapsed .collapse-toggle::before { transform: rotate(-45deg); margin-top: 2px; }
+
+.school-name, .class-name, .group-name {
+  border: 0; background: none; padding: 0; font: inherit; font-size: 15px;
+  font-weight: 650; color: var(--text); text-align: left; cursor: pointer;
+  border-radius: 6px;
+}
+.school-name:hover, .class-name:hover, .group-name:hover { color: var(--brand-text); }
+.school-name:focus-visible, .class-name:focus-visible, .group-name:focus-visible {
+  outline: none; box-shadow: var(--focus);
+}
+.school-card { margin: 0; }
+.school-card.is-collapsed { padding-bottom: 14px; }
+.class-block {
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  padding: 10px; margin-bottom: 8px;
+}
+.class-block:last-child { margin-bottom: 0; }
+.class-block.is-collapsed { background: var(--panel-2); }
+
 .chips { display: flex; gap: 7px; flex-wrap: wrap; }
 .chip {
   border: 1px solid var(--line-strong); background: var(--panel); color: var(--text);
@@ -317,6 +355,7 @@ pre.message {
 .picker .group { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 10px; }
 .picker .group-head { display: flex; align-items: center; gap: 9px; }
 .picker .group-head b { flex: 1; }
+.picker .group-head .group-name { flex: 1; }
 .picker .item { display: flex; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 6px; font-size: 13.5px; }
 .picker .item:hover { background: var(--panel-2); }
 .picker .item small { color: var(--muted); }

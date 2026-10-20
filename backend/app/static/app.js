@@ -84,7 +84,8 @@
     tasks: [],
     route: 'home',
     busy: false,
-    prefs: { theme: 'light', refreshMs: 5000, pageSize: 50 },
+    prefs: { theme: 'light', refreshMs: 5000, pageSize: 50, collapsed: [] },
+    collapsed: new Set(),
     contactsUi: { q: '', school: '', klass: '', role: '', optedOut: '', page: 1, selected: new Set() },
     campaignsUi: { q: '', status: '', page: 1, pageSize: 25, selected: new Set() },
     tasksUi: { campaignId: null, q: '', role: '', sort: 'id', page: 1, statusFilter: '', selectedId: null, updatedAt: null },
@@ -554,6 +555,50 @@
     return S.schools;
   }
 
+  // --- Сворачивание школ и классов -------------------------------------------
+  // Ключи: s<id> — школа, c<id> — класс. Состояние общее для всех разделов,
+  // где встречаются школы (список школ, выбор получателей), и хранится в настройках.
+
+  const schoolKey = (id) => `s${id}`;
+  const classKey = (id) => `c${id}`;
+
+  function saveCollapsed() {
+    S.prefs.collapsed = Array.from(S.collapsed);
+    savePrefs();
+  }
+
+  function applyCollapsed(block, collapsed) {
+    block.classList.toggle('is-collapsed', collapsed);
+    const body = block.querySelector('.collapse-body');
+    if (body) body.hidden = collapsed;
+    qa('[data-action="collapse-toggle"]', block).forEach((node) => {
+      node.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    });
+  }
+
+  function toggleCollapse(element) {
+    const block = element.closest('[data-collapse]');
+    if (!block) return;
+    const key = block.dataset.collapse;
+    const collapsed = !S.collapsed.has(key);
+    if (collapsed) S.collapsed.add(key);
+    else S.collapsed.delete(key);
+    applyCollapsed(block, collapsed);
+    saveCollapsed();
+  }
+
+  function setAllCollapsed(scope, collapsed) {
+    const container = scope === 'picker' ? $('campaignPicker') : $('schoolList');
+    if (!container) return;
+    container.querySelectorAll('[data-collapse]').forEach((block) => {
+      const key = block.dataset.collapse;
+      if (collapsed) S.collapsed.add(key);
+      else S.collapsed.delete(key);
+      applyCollapsed(block, collapsed);
+    });
+    saveCollapsed();
+  }
+
   function renderSchools() {
     const query = ($('schoolSearch').value || '').trim().toLowerCase();
     const list = S.schools.filter((school) => {
@@ -571,10 +616,18 @@
       : 'Пока нет ни одной школы. Добавьте школу и класс или импортируйте таблицу.';
 
     $('schoolList').innerHTML = list.length
-      ? list.map((school) => `
-        <div class="card" style="margin:0">
-          <div class="card-head">
-            <h3>${esc(school.name)}</h3>
+      ? list.map((school) => {
+        const key = schoolKey(school.id);
+        const collapsed = !query && S.collapsed.has(key);
+        return `
+        <div class="card school-card collapse-block${collapsed ? ' is-collapsed' : ''}" data-collapse="${key}">
+          <div class="card-head collapse-head">
+            <button type="button" class="collapse-toggle" data-action="collapse-toggle" data-collapse-key="${key}"
+                    aria-expanded="${collapsed ? 'false' : 'true'}" aria-controls="schoolBody${school.id}"
+                    title="Свернуть или развернуть школу"></button>
+            <button type="button" class="school-name" data-action="collapse-toggle" data-collapse-key="${key}"
+                    aria-expanded="${collapsed ? 'false' : 'true'}" aria-controls="schoolBody${school.id}"
+                    title="Свернуть или развернуть школу">${esc(school.name)}</button>
             <span class="badge">${(school.classes || []).length} ${plural((school.classes || []).length, 'класс', 'класса', 'классов')}</span>
             <span class="badge ok">КР: ${contactCount(school, 'KR')}</span>
             <span class="badge">РК: ${contactCount(school, 'RK')}</span>
@@ -583,43 +636,57 @@
             <button type="button" class="btn small ghost" data-action="school-rename" data-id="${school.id}">Переименовать</button>
             <button type="button" class="btn small danger" data-action="school-delete" data-id="${school.id}">Удалить</button>
           </div>
-          ${schoolClassList(school)}
-        </div>`).join('')
+          <div class="collapse-body" id="schoolBody${school.id}"${collapsed ? ' hidden' : ''}>
+            ${schoolClassList(school, Boolean(query))}
+          </div>
+        </div>`;
+      }).join('')
       : `<div class="empty">${query ? 'По запросу ничего не найдено.' : 'Школ пока нет.'}
            <div><button type="button" class="btn primary" data-action="school-create">Добавить школу и класс</button></div>
          </div>`;
   }
 
-  function schoolClassList(school) {
+  function schoolClassList(school, expandAll) {
     const classes = school.classes || [];
     if (!classes.length) return '<p class="muted">Классов пока нет. Добавьте первый класс.</p>';
-    return classes.map((item) => `
-      <div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px">
-        <div class="card-head" style="margin-bottom:6px">
-          <b>${esc(item.name)}</b>
+    return classes.map((item) => {
+      const key = classKey(item.id);
+      const collapsed = !expandAll && S.collapsed.has(key);
+      return `
+      <div class="class-block collapse-block${collapsed ? ' is-collapsed' : ''}" data-collapse="${key}">
+        <div class="card-head collapse-head">
+          <button type="button" class="collapse-toggle" data-action="collapse-toggle" data-collapse-key="${key}"
+                  aria-expanded="${collapsed ? 'false' : 'true'}" aria-controls="classBody${item.id}"
+                  title="Свернуть или развернуть класс"></button>
+          <button type="button" class="class-name" data-action="collapse-toggle" data-collapse-key="${key}"
+                  aria-expanded="${collapsed ? 'false' : 'true'}" aria-controls="classBody${item.id}"
+                  title="Свернуть или развернуть класс">${esc(item.name)}</button>
           <span class="badge mute">${(item.contacts || []).length} ${plural((item.contacts || []).length, 'контакт', 'контакта', 'контактов')}</span>
           <span class="spacer"></span>
           <button type="button" class="btn small ghost" data-action="class-rename" data-id="${item.id}">Переименовать</button>
           <button type="button" class="btn small danger" data-action="class-delete" data-id="${item.id}">Удалить</button>
         </div>
-        <div class="table-wrap" style="max-height:none">
-          <table>
-            <thead><tr><th>Роль</th><th>ФИО</th><th>Телефон</th><th>Действия</th></tr></thead>
-            <tbody>
-              ${(item.contacts || []).length ? (item.contacts || []).map((contact) => `
-                <tr>
-                  <td><span class="badge ${contact.role === 'KR' ? 'ok' : 'mute'}">${contact.role === 'KR' ? 'КР' : 'РК'}</span></td>
-                  <td>${esc(contact.name)}${contact.opted_out ? ' <span class="badge err">отписался</span>' : ''}</td>
-                  <td>${contact.phone ? `<button type="button" class="btn link" data-action="copy" data-copy="${esc(contact.phone)}">${esc(contact.phone)}</button>` : '—'}</td>
-                  <td>
-                    <button type="button" class="btn small ghost" data-action="contact-edit" data-id="${contact.id}">Изменить</button>
-                    <button type="button" class="btn small danger" data-action="contact-delete" data-id="${contact.id}">Удалить</button>
-                  </td>
-                </tr>`).join('') : '<tr><td colspan="4" class="empty">Контактов нет</td></tr>'}
-            </tbody>
-          </table>
+        <div class="collapse-body" id="classBody${item.id}"${collapsed ? ' hidden' : ''}>
+          <div class="table-wrap" style="max-height:none">
+            <table>
+              <thead><tr><th>Роль</th><th>ФИО</th><th>Телефон</th><th>Действия</th></tr></thead>
+              <tbody>
+                ${(item.contacts || []).length ? (item.contacts || []).map((contact) => `
+                  <tr>
+                    <td><span class="badge ${contact.role === 'KR' ? 'ok' : 'mute'}">${contact.role === 'KR' ? 'КР' : 'РК'}</span></td>
+                    <td>${esc(contact.name)}${contact.opted_out ? ' <span class="badge err">отписался</span>' : ''}</td>
+                    <td>${contact.phone ? `<button type="button" class="btn link" data-action="copy" data-copy="${esc(contact.phone)}">${esc(contact.phone)}</button>` : '—'}</td>
+                    <td>
+                      <button type="button" class="btn small ghost" data-action="contact-edit" data-id="${contact.id}">Изменить</button>
+                      <button type="button" class="btn small danger" data-action="contact-delete" data-id="${contact.id}">Удалить</button>
+                    </td>
+                  </tr>`).join('') : '<tr><td colspan="4" class="empty">Контактов нет</td></tr>'}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
 
   async function createSchoolAndClass() {
@@ -1112,12 +1179,15 @@
     let withContacts = 0;
     let withoutClass = 0;
     let empty = 0;
+    let lastClass = '';
     ui.rows.forEach((row) => {
       const hasContact = nameHeaders.some((header) => String(row[header] || '').trim());
-      const hasClass = classHeader ? String(row[classHeader] || '').trim() : '';
+      const classValue = classHeader ? String(row[classHeader] || '').trim() : '';
+      if (classValue) lastClass = classValue;
+      const hasClass = classValue || lastClass;
       if (!hasContact && !hasClass) empty += 1;
-      else if (!hasClass) withoutClass += 1;
-      else withContacts += 1;
+      else if (hasContact && !hasClass) withoutClass += 1;
+      else if (hasContact) withContacts += 1;
     });
     return { withContacts, withoutClass, empty, total: ui.rows.length };
   }
@@ -1210,13 +1280,13 @@
           rows: ui.rows,
           mapping: ui.mapping,
           school_name: schoolName,
-          duplicate_mode: 'skip',
+          duplicate_mode: 'update',
         }),
       });
       setImportStep(3);
       $('importResult').innerHTML =
-        `<div class="notice">Импорт завершён. Добавлено контактов: <b>${result.created}</b>, пропущено (уже были): <b>${result.skipped}</b>.</div>`;
-      toast(`Импорт завершён: добавлено ${result.created}, пропущено ${result.skipped}`);
+        `<div class="notice">Импорт завершён. Добавлено контактов: <b>${result.created}</b>, класс исправлен: <b>${result.updated || 0}</b>, пропущено (уже были): <b>${result.skipped}</b>.</div>`;
+      toast(`Импорт завершён: добавлено ${result.created}, исправлено классов ${result.updated || 0}, пропущено ${result.skipped}`);
       await loadSchools();
       await loadContacts().catch(() => {});
     } finally {
@@ -1272,18 +1342,28 @@
       $('campaignPicker').innerHTML = '<p class="muted" style="padding:10px">По запросу получатели не найдены.</p>';
       return;
     }
+    const query = ($('recipientSearch').value || '').trim().toLowerCase();
     $('campaignPicker').innerHTML = Array.from(grouped.entries()).map(([schoolId, classes]) => {
       const school = S.schools.find((item) => item.id === schoolId);
       const schoolContactIds = Array.from(classes.values()).flat().map((contact) => contact.id);
-      const allSelected = schoolContactIds.every((id) => S.recipients.selected.has(id));
+      const selectedCount = schoolContactIds.filter((id) => S.recipients.selected.has(id)).length;
+      const allSelected = schoolContactIds.length > 0 && selectedCount === schoolContactIds.length;
+      const key = schoolKey(schoolId);
+      const collapsed = !query && S.collapsed.has(key);
       return `
-        <div class="group">
+        <div class="group collapse-block${collapsed ? ' is-collapsed' : ''}" data-collapse="${key}">
           <div class="group-head">
+            <button type="button" class="collapse-toggle" data-action="collapse-toggle" data-collapse-key="${key}"
+                    aria-expanded="${collapsed ? 'false' : 'true'}" aria-controls="pickBody${schoolId}"
+                    title="Свернуть или развернуть школу"></button>
             <input type="checkbox" data-pick-school="${schoolId}" ${allSelected ? 'checked' : ''} aria-label="Выбрать школу ${esc(school ? school.name : '')}">
-            <b>${esc(school ? school.name : 'Школа ' + schoolId)}</b>
+            <button type="button" class="group-name" data-action="collapse-toggle" data-collapse-key="${key}"
+                    aria-expanded="${collapsed ? 'false' : 'true'}" aria-controls="pickBody${schoolId}"
+                    title="Свернуть или развернуть школу">${esc(school ? school.name : 'Школа ' + schoolId)}</button>
             <span class="muted">${schoolContactIds.length} ${plural(schoolContactIds.length, 'получатель', 'получателя', 'получателей')}</span>
+            ${selectedCount ? `<span class="badge ok">выбрано: ${selectedCount}</span>` : ''}
           </div>
-          <div class="class-list">
+          <div class="class-list collapse-body" id="pickBody${schoolId}"${collapsed ? ' hidden' : ''}>
             ${Array.from(classes.entries()).map(([classId, contacts]) => `
               <div>
                 <div class="muted" style="margin:4px 0">${esc(contacts[0].klass || 'без класса')}</div>
@@ -2028,6 +2108,7 @@
 
   function applyPrefs() {
     applyTheme(S.prefs.theme);
+    S.collapsed = new Set(Array.isArray(S.prefs.collapsed) ? S.prefs.collapsed : []);
     $('refreshInterval').value = String(S.prefs.refreshMs);
     $('pageSizeDefault').value = String(S.prefs.pageSize);
     S.contactsUi.pageSize = S.prefs.pageSize;
@@ -2045,6 +2126,9 @@
     'school-delete': (id) => deleteSchool(id),
     'class-rename': (id) => renameClass(id),
     'class-delete': (id) => deleteClass(id),
+    'collapse-toggle': (id, element) => toggleCollapse(element),
+    'collapse-all': (id, element) => setAllCollapsed(element.dataset.scope, true),
+    'collapse-none': (id, element) => setAllCollapsed(element.dataset.scope, false),
     'contact-edit': (id) => openContactDialog(id),
     'contact-delete': (id) => deleteContactById(id),
     'contact-create': () => openContactDialog(null),

@@ -751,9 +751,19 @@ def delete_campaigns(data: CampaignDeleteIn, _: bool = Depends(require_auth)) ->
 
 def _rows_from_upload(filename: str, raw: bytes) -> list[list[Any]]:
     if filename.lower().endswith((".xlsx", ".xlsm")):
-        workbook = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+        workbook = load_workbook(io.BytesIO(raw), read_only=False, data_only=True)
         sheet = workbook.active
         rows = [list(row) for row in sheet.iter_rows(values_only=True)]
+        for merged_range in sheet.merged_cells.ranges:
+            min_col, min_row, max_col, max_row = merged_range.bounds
+            if min_col != max_col:
+                continue
+            value = sheet.cell(min_row, min_col).value
+            if value is None:
+                continue
+            column_index = min_col - 1
+            for row_index in range(min_row, max_row + 1):
+                rows[row_index - 1][column_index] = value
         workbook.close()
         return rows
     text = raw.decode("utf-8-sig", errors="replace")
@@ -874,48 +884,82 @@ def _resolve_class(session: Any, school_id: int, class_name: str) -> SchoolClass
     return item
 
 
+def _normalize_import_header(value: Any) -> str:
+    return "".join(str(value or "").casefold().replace("ё", "е").split())
+
+
+def _import_row_value(row: dict[str, Any], header: str | None) -> Any:
+    if header is None:
+        return None
+    if header in row:
+        return row[header]
+    normalized_header = _normalize_import_header(header)
+    return next(
+        (value for key, value in row.items() if _normalize_import_header(key) == normalized_header),
+        None,
+    )
+
+
 @app.post("/api/imports/school-contacts")
 def import_school_contacts(
     data: ContactImport, _: bool = Depends(require_auth)
 ) -> dict[str, int]:
     if not data.school_name:
         raise HTTPException(400, "Не указано название школы")
-    created = skipped = 0
+    created = updated = skipped = 0
+    headers_by_field = {field: header for header, field in data.mapping.items()}
+    class_header = headers_by_field.get("class_name")
+    last_class_name = ""
     with session_scope() as session:
         school = _resolve_school(session, data.school_name)
         for row in data.rows:
-            class_name = row.get(data.mapping.get("Класс", ""), "") or ""
-            class_name = str(class_name).strip()
+            class_name = str(_import_row_value(row, class_header) or "").strip() if class_header else ""
+            if class_name:
+                last_class_name = class_name
+            elif last_class_name:
+                # Excel often stores the class only in the first row of a merged cell.
+                class_name = last_class_name
             item = _resolve_class(session, school.id, class_name)
             for role, name_field, phone_field in (
                 ("KR", "kr_name", "kr_phone"),
                 ("RK", "rk_name", "rk_phone"),
             ):
-                name_header = next(
-                    (header for header, field in data.mapping.items() if field == name_field),
-                    None,
-                )
-                phone_header = next(
-                    (header for header, field in data.mapping.items() if field == phone_field),
-                    None,
-                )
+                name_header = headers_by_field.get(name_field)
                 if name_header is None:
                     continue
-                name = str(row.get(name_header, "") or "").strip()
+                name = str(_import_row_value(row, name_header) or "").strip()
                 if not name:
                     continue
+                phone_header = headers_by_field.get(phone_field)
                 phone = normalize_phone(
-                    str(row.get(phone_header, "") or "").strip() if phone_header else None
+                    str(_import_row_value(row, phone_header) or "").strip() if phone_header else None
                 )
                 duplicate = session.scalar(
                     select(Client).where(
+                        Client.school_id == school.id,
                         Client.class_id == item.id,
                         Client.name == name,
                         Client.role == role,
                     )
                 )
+                if duplicate is None:
+                    duplicate = session.scalar(
+                        select(Client)
+                        .outerjoin(SchoolClass, Client.class_id == SchoolClass.id)
+                        .where(
+                            Client.school_id == school.id,
+                            Client.name == name,
+                            Client.role == role,
+                            (Client.class_id.is_(None)) | (SchoolClass.name == "Без класса"),
+                        )
+                    )
                 if duplicate is not None:
-                    skipped += 1
+                    if data.duplicate_mode == "update" and duplicate.class_id != item.id:
+                        duplicate.class_id = item.id
+                        duplicate.phone = phone or duplicate.phone
+                        updated += 1
+                    else:
+                        skipped += 1
                     continue
                 session.add(
                     Client(
@@ -929,7 +973,7 @@ def import_school_contacts(
                 )
                 created += 1
         session.commit()
-    return {"created": created, "skipped": skipped}
+    return {"created": created, "updated": updated, "skipped": skipped}
 
 
 @app.patch("/api/settings")

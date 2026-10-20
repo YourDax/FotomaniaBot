@@ -111,6 +111,8 @@
                 <label class="sr-only" for="schoolSearch">Поиск школы или класса</label>
                 <input id="schoolSearch" type="search" placeholder="Поиск школы или класса">
               </div>
+              <button type="button" class="btn small ghost" data-action="collapse-all" data-scope="schools">Свернуть все</button>
+              <button type="button" class="btn small ghost" data-action="collapse-none" data-scope="schools">Развернуть все</button>
               <button type="button" class="btn ghost" id="schoolsRefresh">Обновить</button>
               <button type="button" class="btn primary" id="btnAddSchool">Добавить школу/класс</button>
             </div>
@@ -276,6 +278,8 @@
               <h3>Получатели</h3><span class="spacer"></span>
               <button type="button" class="btn small ghost" id="btnSelectAllRecipients">Выбрать всех</button>
               <button type="button" class="btn small ghost" id="btnClearRecipients">Снять выбор</button>
+              <button type="button" class="btn small ghost" data-action="collapse-all" data-scope="picker">Свернуть все</button>
+              <button type="button" class="btn small ghost" data-action="collapse-none" data-scope="picker">Развернуть все</button>
             </div>
             <div class="search" style="max-width:320px;margin-bottom:10px">
               <label class="sr-only" for="recipientSearch">Поиск получателя</label>
@@ -515,6 +519,6 @@
     <div class="modal-foot" id="modalFoot"></div>
   </dialog>
 
-  <script src="/static/app.js" defer></script>
+  <script src="/static/app.js?v=20261020-classes" defer></script>
 </body>
 </html>

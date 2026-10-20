@@ -1,5 +1,9 @@
+import io
+
 from fastapi.testclient import TestClient
 from uuid import uuid4
+
+from openpyxl import Workbook
 from app.main import app
 from app import main
 from app.max_browser import (
@@ -300,6 +304,111 @@ def test_csv_import_and_settings():
     assert client.patch("/api/settings", json={"mode": "manual"}).status_code == 200
 
 
+def test_school_contacts_import_inherits_merged_class_and_uses_mapped_header():
+    suffix = uuid4().hex[:8]
+    school_name = f"Школа объединённых ячеек {suffix}"
+    rows = [
+        {"Название класса": "5А", "ФИО КР": f"КР 5А {suffix}"},
+        {"Название класса": "", "ФИО КР": f"КР 5А второй {suffix}"},
+        {"Название класса": "6Б", "ФИО КР": f"КР 6Б {suffix}"},
+        {"Название класса": "", "ФИО КР": f"КР 6Б второй {suffix}"},
+    ]
+    response = client.post(
+        "/api/imports/school-contacts",
+        json={
+            "rows": rows,
+            "mapping": {"Название класса": "class_name", "ФИО КР": "kr_name"},
+            "school_name": school_name,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"created": 4, "updated": 0, "skipped": 0}
+    imported = {
+        item["name"]: item
+        for item in client.get("/api/clients").json()
+        if item["name"].endswith(suffix)
+    }
+    assert len(imported) == 4
+    class_ids = {name: contact["class_id"] for name, contact in imported.items()}
+    assert class_ids[f"КР 5А {suffix}"] == class_ids[f"КР 5А второй {suffix}"]
+    assert class_ids[f"КР 6Б {suffix}"] == class_ids[f"КР 6Б второй {suffix}"]
+    assert class_ids[f"КР 5А {suffix}"] != class_ids[f"КР 6Б {suffix}"]
+
+
+def test_school_contacts_import_update_reassigns_existing_no_class_contacts():
+    suffix = uuid4().hex[:8]
+    school_name = f"Школа восстановления классов {suffix}"
+    placeholder = client.post(
+        "/api/classes",
+        json={"school_name": school_name, "class_name": "Без класса"},
+    ).json()
+    old_contact = client.post(
+        "/api/clients",
+        json={
+            "name": f"КР без класса {suffix}",
+            "phone": "79990000000",
+            "school_id": placeholder["school_id"],
+            "class_id": placeholder["class_id"],
+            "role": "KR",
+        },
+    ).json()
+
+    response = client.post(
+        "/api/imports/school-contacts",
+        json={
+            "rows": [{"Класс": "2В", "ФИО КР": f"КР без класса {suffix}", "Телефон КР": "79990000001"}],
+            "mapping": {"Класс": "class_name", "ФИО КР": "kr_name", "Телефон КР": "kr_phone"},
+            "school_name": school_name,
+            "duplicate_mode": "update",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"created": 0, "updated": 1, "skipped": 0}
+    saved_contact = next(
+        item for item in client.get("/api/clients").json() if item["id"] == old_contact["id"]
+    )
+    assert saved_contact["school_id"] == placeholder["school_id"]
+    assert saved_contact["class_id"] != placeholder["class_id"]
+    classes = next(
+        item["classes"] for item in client.get("/api/schools").json()
+        if item["id"] == placeholder["school_id"]
+    )
+    assigned_class = next(item for item in classes if item["id"] == saved_contact["class_id"])
+    assert assigned_class["name"] == "2В"
+    assert assigned_class["contacts"][0]["id"] == old_contact["id"]
+
+
+
+def test_school_contacts_import_normalizes_mapped_headers_with_newlines():
+    suffix = uuid4().hex[:8]
+    school_name = f"Школа заголовков с переносами {suffix}"
+    rows = [
+        {"Класс": "5А", "ФИО КР": f"КР 5А {suffix}"},
+        {"Класс": "", "ФИО КР": f"КР 5А второй {suffix}"},
+        {"Класс": "6Б", "ФИО КР": f"КР 6Б {suffix}"},
+    ]
+    response = client.post(
+        "/api/imports/school-contacts",
+        json={
+            "rows": rows,
+            "mapping": {"Класс\n": "class_name", "ФИО\nКР": "kr_name"},
+            "school_name": school_name,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"created": 3, "updated": 0, "skipped": 0}
+    imported = {
+        item["name"]: item
+        for item in client.get("/api/clients").json()
+        if item["name"].endswith(suffix)
+    }
+    assert imported[f"КР 5А {suffix}"]["class_id"] == imported[f"КР 5А второй {suffix}"]["class_id"]
+    assert imported[f"КР 5А {suffix}"]["class_id"] != imported[f"КР 6Б {suffix}"]["class_id"]
+
+
 def test_school_contacts_import_creates_separate_roles():
     rows = [{"Класс": "5А", "ФИО КР": "Иванов Иван", "Телефон КР": "79990000001", "ФИО РК": "Петрова Анна", "Телефон РК": "79990000002"}]
     response = client.post(
@@ -314,6 +423,53 @@ def test_school_contacts_import_creates_separate_roles():
     contacts = client.get("/api/clients").json()
     school_contacts = [item for item in contacts if item["class_id"] and item["role"] in {"KR", "RK"}]
     assert {item["role"] for item in school_contacts} == {"KR", "RK"}
+
+
+def test_excel_preview_imports_contacts_into_distinct_classes():
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["Школа: Тестовая"])
+    sheet.append([None])
+    sheet.append(["No", "Класс", "Кабинет", "ФИО КР", "Телефон КР", "ФИО РК", "Телефон РК"])
+    sheet.append([1, "5А", None, None, "79990000001", None, None])
+    sheet.append([2, None, None, None, None, None, None])
+    sheet.append([3, "6Б", None, None, "79990000002", None, None])
+    sheet.cell(row=4, column=4, value="КР 5А")
+    sheet.cell(row=5, column=4, value="КР 5А второй")
+    sheet.cell(row=6, column=4, value="КР 6Б")
+    sheet.merge_cells("B4:B5")
+    stream = io.BytesIO()
+    workbook.save(stream)
+    workbook.close()
+    suffix = uuid4().hex[:8]
+
+    preview_response = client.post(
+        "/api/imports/preview",
+        files={"file": ("school.xlsx", stream.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+
+    assert preview_response.status_code == 200
+    preview = preview_response.json()
+    assert preview["header_row"] == 3
+    assert [row["Класс"] for row in preview["rows"]] == ["5А", "5А", "6Б"]
+    import_response = client.post(
+        "/api/imports/school-contacts",
+        json={
+            "rows": preview["rows"],
+            "mapping": {"Класс": "class_name", "ФИО КР": "kr_name", "Телефон КР": "kr_phone"},
+            "school_name": f"Школа XLSX {suffix}",
+        },
+    )
+
+    assert import_response.status_code == 200
+    assert import_response.json() == {"created": 3, "updated": 0, "skipped": 0}
+    school = next(
+        item for item in client.get("/api/schools").json() if item["name"] == f"Школа XLSX {suffix}"
+    )
+    classes = {item["name"]: item for item in school["classes"]}
+    assert set(classes) == {"5А", "6Б"}
+    assert {contact["name"] for contact in classes["5А"]["contacts"]} == {"КР 5А", "КР 5А второй"}
+    assert {contact["name"] for contact in classes["6Б"]["contacts"]} == {"КР 6Б"}
 
 
 def test_import_detects_header_row_not_at_top():
