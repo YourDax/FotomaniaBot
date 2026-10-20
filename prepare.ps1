@@ -26,9 +26,11 @@ function Resolve-Python {
     $candidates = @()
     $launcher = Get-Command 'py.exe' -ErrorAction SilentlyContinue
     if ($launcher) {
-        # Let the Python launcher select the installed default instead of requiring
-        # a particular minor release (which may not exist on the target PC).
-        $candidates += [pscustomobject]@{ FilePath = $launcher.Source; Prefix = @('-3') }
+        # Prefer widely supported versions. Probe each installed version without
+        # letting PowerShell turn the launcher's "not installed" message into a stop.
+        foreach ($version in @('3.13', '3.12', '3.11', '3.10', '3.14', '3.15')) {
+            $candidates += [pscustomobject]@{ FilePath = $launcher.Source; Prefix = @('-' + $version) }
+        }
     }
 
     $pythonCommand = Get-Command 'python.exe' -ErrorAction SilentlyContinue
@@ -51,16 +53,21 @@ function Resolve-Python {
     }
 
     foreach ($candidate in $candidates) {
-        $versionArguments = @($candidate.Prefix) + @('-c', 'import sys; print(str(sys.version_info[0]) + chr(46) + str(sys.version_info[1]))')
-        $versionOutput = & $candidate.FilePath @versionArguments 2>$null
-        if ($LASTEXITCODE -ne 0 -or -not $versionOutput) { continue }
+        $versionArguments = @($candidate.Prefix) + @('-c', 'import sys; print(sys.version_info[0]); print(sys.version_info[1]); print(sys.executable)')
+        $previousErrorActionPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        $runtimeInfo = @(& $candidate.FilePath @versionArguments 2>$null)
+        $runtimeExitCode = $LASTEXITCODE
+        $ErrorActionPreference = $previousErrorActionPreference
+        if ($runtimeExitCode -ne 0 -or $runtimeInfo.Count -lt 3) { continue }
 
-        $versionParts = ([string]$versionOutput | Select-Object -Last 1) -split '\.'
-        if ($versionParts.Count -ne 2 -or [int]$versionParts[0] -ne 3 -or [int]$versionParts[1] -lt 10) { continue }
+        $major = [int]$runtimeInfo[0]
+        $minor = [int]$runtimeInfo[1]
+        if ($major -ne 3 -or $minor -lt 10) { continue }
 
-        $script:Python = $candidate.FilePath
-        $script:PythonPrefix = @($candidate.Prefix)
-        $script:PythonVersion = [string]$versionOutput
+        $script:Python = [string]$runtimeInfo[2]
+        $script:PythonPrefix = @()
+        $script:PythonVersion = "$major.$minor"
         Write-Host "Используется установленный Python $($script:PythonVersion): $($script:Python)"
         return
     }
@@ -77,8 +84,12 @@ function Invoke-Python {
 
 function Test-Dependencies {
     if (-not (Test-Path -LiteralPath $script:Packages)) { return $false }
-    Invoke-Python -Arguments @('-c', 'import fastapi, openpyxl, playwright, sqlalchemy, uvicorn') *> $null
-    return $LASTEXITCODE -eq 0
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    Invoke-Python -Arguments @('-c', 'import fastapi, openpyxl, playwright, sqlalchemy, uvicorn; from pydantic import BaseModel; from pydantic_settings import BaseSettings') *> $null
+    $dependencyExitCode = $LASTEXITCODE
+    $ErrorActionPreference = $previousErrorActionPreference
+    return $dependencyExitCode -eq 0
 }
 
 function Initialize-Runtime {
@@ -130,15 +141,22 @@ function Start-Application {
 
     Write-Host 'Запуск локального приложения...'
     $startArguments = @($script:PythonPrefix) + @('-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8000')
+    $backendStdout = Join-Path $script:RuntimeDir 'backend.stdout.log'
+    $backendStderr = Join-Path $script:RuntimeDir 'backend.stderr.log'
     $process = Start-Process -FilePath $script:Python `
         -ArgumentList $startArguments `
         -WorkingDirectory (Join-Path $script:Root 'backend') `
+        -RedirectStandardOutput $backendStdout `
+        -RedirectStandardError $backendStderr `
         -PassThru
 
     for ($attempt = 0; $attempt -lt 45; $attempt++) {
         Start-Sleep -Seconds 1
         if ($process.HasExited) {
-            throw "Backend завершился во время запуска (код $($process.ExitCode)). См. backend\logs\session.log."
+            $errorDetails = if (Test-Path -LiteralPath $backendStderr) {
+                (Get-Content -LiteralPath $backendStderr -Tail 30 -ErrorAction SilentlyContinue) -join [Environment]::NewLine
+            } else { '' }
+            throw "Backend завершился во время запуска (код $($process.ExitCode)). Вывод backend: $backendStderr`n$errorDetails"
         }
         try {
             $response = Invoke-WebRequest -UseBasicParsing -Uri $healthUrl -TimeoutSec 2
