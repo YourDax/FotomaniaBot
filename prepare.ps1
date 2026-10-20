@@ -26,9 +26,9 @@ function Resolve-Python {
     $candidates = @()
     $launcher = Get-Command 'py.exe' -ErrorAction SilentlyContinue
     if ($launcher) {
-        foreach ($version in @('3.13', '3.12', '3.11', '3.10', '3.14', '3.15')) {
-            $candidates += [pscustomobject]@{ FilePath = $launcher.Source; Prefix = @('-' + $version) }
-        }
+        # Let the Python launcher select the installed default instead of requiring
+        # a particular minor release (which may not exist on the target PC).
+        $candidates += [pscustomobject]@{ FilePath = $launcher.Source; Prefix = @('-3') }
     }
 
     $pythonCommand = Get-Command 'python.exe' -ErrorAction SilentlyContinue
@@ -39,6 +39,14 @@ function Resolve-Python {
         $pythonCommand = Get-Command 'python' -ErrorAction SilentlyContinue
         if ($pythonCommand) {
             $candidates += [pscustomobject]@{ FilePath = $pythonCommand.Source; Prefix = @() }
+        }
+    }
+
+    # The newer Python install manager uses `py` rather than `py.exe` on PATH.
+    if (-not $launcher) {
+        $launcher = Get-Command 'py' -ErrorAction SilentlyContinue
+        if ($launcher) {
+            $candidates += [pscustomobject]@{ FilePath = $launcher.Source; Prefix = @('-3') }
         }
     }
 
