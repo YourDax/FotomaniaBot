@@ -17,6 +17,7 @@ $script:Packages = Join-Path $script:RuntimeDir 'packages'
 $script:BrowserPath = Join-Path $script:RuntimeDir 'ms-playwright'
 $script:Requirements = Join-Path $script:Root 'backend\requirements.txt'
 $script:BrowserStamp = Join-Path $script:RuntimeDir 'chromium-installed.txt'
+$script:DependencyStamp = Join-Path $script:RuntimeDir 'packages-python.txt'
 
 $env:PYTHONPATH = $script:Packages
 $env:PLAYWRIGHT_BROWSERS_PATH = $script:BrowserPath
@@ -26,9 +27,8 @@ function Resolve-Python {
     $candidates = @()
     $launcher = Get-Command 'py.exe' -ErrorAction SilentlyContinue
     if ($launcher) {
-        # Prefer widely supported versions. Probe each installed version without
-        # letting PowerShell turn the launcher's "not installed" message into a stop.
-        foreach ($version in @('3.13', '3.12', '3.11', '3.10', '3.14', '3.15')) {
+        # Pinned backend dependencies (SQLAlchemy 2.0.36, pydantic-core) support Python 3.10-3.13.
+        foreach ($version in @('3.13', '3.12', '3.11', '3.10')) {
             $candidates += [pscustomobject]@{ FilePath = $launcher.Source; Prefix = @('-' + $version) }
         }
     }
@@ -63,7 +63,7 @@ function Resolve-Python {
 
         $major = [int]$runtimeInfo[0]
         $minor = [int]$runtimeInfo[1]
-        if ($major -ne 3 -or $minor -lt 10) { continue }
+        if ($major -ne 3 -or $minor -lt 10 -or $minor -gt 13) { continue }
 
         $script:Python = [string]$runtimeInfo[2]
         $script:PythonPrefix = @()
@@ -72,7 +72,7 @@ function Resolve-Python {
         return
     }
 
-    throw 'Не найден установленный Python 3.10 или новее. Установите Python обычным способом и убедитесь, что доступен py launcher либо python в PATH.'
+    throw 'Не найден подходящий Python 3.10-3.13. Установите Python 3.13 обычным способом (с py launcher) и повторите запуск. Python 3.14+ пока не поддерживается зависимостями проекта.'
 }
 
 function Invoke-Python {
@@ -84,6 +84,8 @@ function Invoke-Python {
 
 function Test-Dependencies {
     if (-not (Test-Path -LiteralPath $script:Packages)) { return $false }
+    if (-not (Test-Path -LiteralPath $script:DependencyStamp)) { return $false }
+    if ((Get-Content -LiteralPath $script:DependencyStamp -Raw).Trim() -ne $script:PythonVersion) { return $false }
     $previousErrorActionPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     Invoke-Python -Arguments @('-c', 'import fastapi, openpyxl, playwright, sqlalchemy, uvicorn; from pydantic import BaseModel; from pydantic_settings import BaseSettings') *> $null
@@ -109,6 +111,7 @@ function Initialize-Runtime {
         Write-Host 'Установка зависимостей приложения...'
         Invoke-Python -Arguments @('-m', 'pip', 'install', '--disable-pip-version-check', '--prefer-binary', '--target', $script:Packages, '-r', $script:Requirements) | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'Не удалось установить зависимости. Проверьте Интернет и повторите запуск.' }
+        Set-Content -LiteralPath $script:DependencyStamp -Value $script:PythonVersion -Encoding ascii
     }
 
     $browser = Get-ChildItem -LiteralPath $script:BrowserPath -Directory -Filter 'chromium-*' -ErrorAction SilentlyContinue | Select-Object -First 1
