@@ -553,6 +553,27 @@ def test_task_status_can_be_updated_manually():
     assert saved["status"] == "CONTACT_NOT_FOUND"
 
 
+def test_not_found_mark_clears_only_on_manual_sent():
+    suffix = uuid4().hex
+    contact = client.post(
+        "/api/clients",
+        json={"name": f"Пометка {suffix}", "phone": f"7998{suffix[:7]}"},
+    ).json()
+    campaign = client.post(
+        "/api/campaigns",
+        json={"name": f"Пометка рассылки {suffix}", "message": "Текст", "client_ids": [contact["id"]]},
+    ).json()
+    task = client.get(f"/api/campaigns/{campaign['id']}/tasks").json()[0]
+    assert client.patch(f"/api/tasks/{task['id']}/status", json={"status": "CONTACT_NOT_FOUND"}).status_code == 200
+    assert client.patch(f"/api/tasks/{task['id']}/status", json={"status": "PENDING"}).status_code == 409
+    assert client.post(f"/api/tasks/{task['id']}/confirm", json={"result": "failed"}).status_code == 409
+    saved = client.get(f"/api/campaigns/{campaign['id']}/tasks").json()[0]
+    assert saved["status"] == "CONTACT_NOT_FOUND"
+    assert client.post(f"/api/tasks/{task['id']}/confirm", json={"result": "sent"}).status_code == 200
+    saved = client.get(f"/api/campaigns/{campaign['id']}/tasks").json()[0]
+    assert saved["status"] == "SENT"
+
+
 def test_campaign_can_use_selected_contacts_from_multiple_schools():
     first = client.post(
         "/api/classes",
@@ -652,6 +673,30 @@ def test_open_max_task_opens_chat_without_inserting_text(monkeypatch):
     saved = client.get(f"/api/campaigns/{campaign['id']}/tasks").json()[0]
     assert saved["opened_at"] is not None
     assert saved["browser_prepared_at"] is None
+
+
+def test_open_max_task_not_found_is_a_status(monkeypatch):
+    suffix = uuid4().hex
+    contact = client.post(
+        "/api/clients",
+        json={"name": f"Открыть не найден {suffix}", "phone": f"+7999{suffix[:7]}"},
+    ).json()
+    campaign = client.post(
+        "/api/campaigns",
+        json={"name": f"Открытие не найден {suffix}", "message": "Не вставлять", "client_ids": [contact["id"]]},
+    ).json()
+    task = client.get(f"/api/campaigns/{campaign['id']}/tasks").json()[0]
+
+    def fail_open(name, identity):
+        raise MaxBrowserError("Контакт не найден в MAX по указанному номеру телефона.")
+
+    monkeypatch.setattr(main, "open_chat", fail_open)
+    response = client.post(f"/api/tasks/{task['id']}/open-max")
+    assert response.status_code == 502
+    saved = client.get(f"/api/campaigns/{campaign['id']}/tasks").json()[0]
+    assert saved["status"] == "CONTACT_NOT_FOUND"
+    assert saved["browser_error"] is None
+    assert saved["opened_at"] is None
 
 
 def test_prepare_max_contact_not_found_is_a_status(monkeypatch):

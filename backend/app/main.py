@@ -1100,6 +1100,21 @@ def get_settings(_: bool = Depends(require_auth)) -> dict[str, str]:
 
 
 
+NOT_FOUND_STATUS = "CONTACT_NOT_FOUND"
+NOT_FOUND_CLEARING_STATUSES = frozenset({"SENT"})
+
+
+def _guard_not_found_mark(task: DeliveryTask, new_status: str) -> None:
+    """Пометка «Не найден в MAX» снимается только положительным ручным статусом."""
+    if task.status != NOT_FOUND_STATUS or new_status == NOT_FOUND_STATUS:
+        return
+    if new_status not in NOT_FOUND_CLEARING_STATUSES:
+        raise HTTPException(
+            409,
+            "Пометку «Не найден в MAX» снимает только ручной статус «Готово» (SENT)",
+        )
+
+
 def _task_and_contact(session: Any, task_id: int) -> tuple[DeliveryTask, Client]:
     task = session.get(DeliveryTask, task_id)
     if task is None:
@@ -1158,11 +1173,21 @@ def open_max_task(task_id: int, _: bool = Depends(require_auth)) -> dict[str, An
     try:
         result = open_chat(client_name, identity)
     except MaxBrowserError as exc:
+        with session_scope() as session:
+            failed = session.get(DeliveryTask, task_id)
+            if failed is not None:
+                if "не найден" in str(exc).casefold():
+                    failed.status = NOT_FOUND_STATUS
+                    failed.browser_error = None
+                else:
+                    failed.browser_error = str(exc)
+                session.commit()
         raise HTTPException(502, str(exc)) from exc
     with session_scope() as session:
         task = session.get(DeliveryTask, task_id)
         if task is not None:
             task.opened_at = now()
+            task.browser_error = None
             session.commit()
     return {"status": result.status, "page_url": result.page_url, "client": result.client_name}
 
@@ -1236,6 +1261,7 @@ def update_task_status(
 ) -> dict[str, Any]:
     with session_scope() as session:
         task, _contact = _task_and_contact(session, task_id)
+        _guard_not_found_mark(task, data.status)
         task.status = data.status
         if data.status in {"SENT", "FAILED", "CANCELLED"}:
             task.finished_at = now()
@@ -1251,6 +1277,7 @@ def confirm_manual_task(
     with session_scope() as session:
         task, _contact = _task_and_contact(session, task_id)
         mapping = {"sent": "SENT", "failed": "FAILED", "unknown": "UNKNOWN"}
+        _guard_not_found_mark(task, mapping[data.result])
         task.operator_result = data.result
         task.operator_confirmed_at = now()
         task.status = mapping[data.result]

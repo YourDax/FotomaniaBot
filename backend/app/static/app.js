@@ -1939,6 +1939,7 @@
           <td><span class="badge ${task.recipient_role === 'KR' ? 'ok' : 'mute'}">${task.recipient_role === 'KR' ? 'КР' : 'РК'}</span></td>
           <td>
             ${task.browser_prepared_at ? '<span class="badge ok">черновик готов</span><br>' : ''}
+            ${task.status === 'CONTACT_NOT_FOUND' ? `<span class="badge err">${esc(statusName(task.status))}</span><br>` : ''}
             ${task.opened_at ? '<span class="badge mute">чат открыт</span>' : ''}
             ${task.browser_error ? `<span class="badge err">ошибка MAX</span>` : ''}
           </td>
@@ -2089,7 +2090,7 @@
     try {
       const result = await api(`/tasks/${taskId}/open-max`, { method: 'POST' });
       toast(`Чат открыт для ${result.client}. Текст не вставлялся.`);
-      if (result.page_url) window.open(result.page_url, '_blank', 'noopener,noreferrer');
+      // Поиск выполняется во вкладке MAX в подключённом браузере; новую вкладку не открываем.
       $('taskLastError').textContent = 'последнее открытие чата: успех';
     } catch (error) {
       $('taskLastError').textContent = error.message;
