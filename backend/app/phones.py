@@ -15,7 +15,13 @@ def normalize_phone(value: str | None) -> str | None:
     """Store Russian mobiles as +7XXXXXXXXXX; empty / no digits -> None."""
     if value is None:
         return None
-    text = str(value).strip()
+    if isinstance(value, float) and value.is_integer():
+        # Excel stores numeric cells as float: 89099695363 arrives as 89099695363.0.
+        text = str(int(value))
+    else:
+        text = str(value).strip()
+        # Strip a spurious fractional zero tail such as "89099695363.0" or "89099695363.00".
+        text = re.sub(r"^(\d+)\.0+$", r"\1", text)
     if not text:
         return None
     digits = phone_digits(text)

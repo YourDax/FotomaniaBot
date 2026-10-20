@@ -773,19 +773,27 @@ def _rows_from_upload(filename: str, raw: bytes) -> list[list[Any]]:
 
 
 def _build_preview(rows: list[list[Any]]) -> dict[str, Any]:
+    def cell_text(cell: Any) -> str:
+        if cell is None:
+            return ""
+        # Excel returns whole numbers as float (89099695363.0); show them as integers.
+        if isinstance(cell, float) and cell.is_integer():
+            return str(int(cell))
+        return str(cell).strip()
+
     header_index = detect_header_row(rows)
     raw_headers = rows[header_index] if rows else []
-    headers = [str(cell).strip() if cell is not None else "" for cell in raw_headers]
+    headers = [cell_text(cell) for cell in raw_headers]
     data_rows = rows[header_index + 1 :]
     preview_rows = []
     for row in data_rows:
-        if all(cell is None or str(cell).strip() == "" for cell in row):
+        if all(cell_text(cell) == "" for cell in row):
             continue
         record = {}
         for index, header in enumerate(headers):
             if not header:
                 continue
-            record[header] = "" if index >= len(row) or row[index] is None else str(row[index]).strip()
+            record[header] = "" if index >= len(row) else cell_text(row[index])
         preview_rows.append(record)
     return {
         "header_row": header_index + 1,
