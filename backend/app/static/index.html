@@ -1,59 +1,520 @@
-<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Школьные рассылки MAX</title>
-<style>
-:root{font-family:Arial,sans-serif;color:#20304b;background:#f4f7fb;--blue:#2563eb;--line:#e1e8f2}*{box-sizing:border-box}body{margin:0}.layout{display:flex;min-height:100vh}.side{width:235px;background:#102a56;color:#dceaff;padding:22px 13px}.logo{font-size:20px;font-weight:bold;color:#fff;padding:0 12px 24px}.logo small{display:block;font-size:11px;color:#9db9e6;margin-top:5px}nav button{display:block;width:100%;border:0;background:transparent;color:#c8d9f4;text-align:left;padding:12px;border-radius:8px;margin:3px 0;cursor:pointer}nav button.active,nav button:hover{background:#1f4d91;color:#fff}.content{width:min(1250px,100%);margin:auto;padding:28px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}.top h1{margin:0;font-size:26px}.muted{font-size:13px;color:#718096}.warn{background:#fff2d8;color:#825d00;padding:10px 13px;border-radius:8px;font-size:12px}.view{display:none}.view.active{display:block}.panel,.stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:19px;margin-bottom:17px;box-shadow:0 2px 8px #193e6a0a}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.stat label{display:block;color:#718096;font-size:12px}.stat b{display:block;font-size:25px;margin-top:8px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:17px}.form{display:grid;gap:10px}.row{display:flex;gap:9px;align-items:center}.row>*{flex:1}input,select,textarea{font:inherit;border:1px solid #d2ddeb;border-radius:8px;padding:10px;width:100%;background:#fff}textarea{min-height:120px;resize:vertical}button.primary,button.secondary,button.danger{border:0;border-radius:8px;padding:10px 14px;cursor:pointer;font-weight:bold}button.primary{background:var(--blue);color:white}button.secondary{background:#edf3ff;color:#2253ad}button.danger{background:#dc3545;color:#fff}h2{font-size:18px;margin-top:0}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px 8px;border-bottom:1px solid #edf0f5;font-size:13px}th{font-size:12px;color:#6d7b92}.table{overflow:auto}.badge{display:inline-block;padding:4px 8px;border-radius:14px;background:#e8f1ff;color:#2253ad;font-size:11px}.badge.ok{background:#e3f7eb;color:#16713b}.empty{text-align:center;color:#8996aa;padding:25px}.drop{border:2px dashed #c8d5eb;border-radius:10px;padding:25px;text-align:center}.drop label{color:#2563eb;cursor:pointer}.drop input{display:none}.notice{padding:11px;border-radius:8px;margin-bottom:14px;background:#e5f7eb;color:#176b3a}.notice.error{background:#ffe8e8;color:#a32828}.hidden{display:none!important}.preview{max-height:230px;overflow:auto;margin-top:12px}.mapping{display:grid;grid-template-columns:1fr 1fr;gap:8px}.mapping .row{border-bottom:1px solid #edf0f5;padding:5px}.check{display:flex;gap:7px;align-items:center}.check input{width:auto}@media(max-width:750px){.layout{display:block}.side{width:100%;padding:12px}.logo{padding-bottom:10px}nav{display:flex;overflow:auto}nav button{min-width:max-content}.content{padding:15px}.stats{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.top{display:block}.warn{display:inline-block;margin-top:12px}.mapping{grid-template-columns:1fr}}.campaign-step{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.campaign-step span{padding:6px 10px;border-radius:16px;background:#edf3ff;color:#2253ad;font-size:12px}.campaign-step span.done{background:#e3f7eb;color:#16713b}.campaign-task{min-width:720px;cursor:pointer}.campaign-task:hover{background:#f5f8ff}.campaign-task.selected-task{background:#fff3c4;outline:2px solid #f0c419}.task-state{font-weight:bold}.task-state.ready{color:#16713b}.task-state.error{color:#a32828}.error-detail{display:block;margin-top:6px;padding:8px;background:#fff4f4;border-radius:6px;color:#8e2525}.notice{position:relative}.notice.error{border-left:4px solid #dc3545}.action-group{display:flex;gap:6px;flex-wrap:wrap}
-</style><style>.school-picker{margin:8px 0 14px}.school-picker summary{cursor:pointer;border:1px solid #d2ddeb;border-radius:8px;padding:10px;background:#fff}.school-picker[open] summary{border-radius:8px 8px 0 0}.recipient-list{display:grid;gap:6px;margin:0;padding:8px;max-height:190px;overflow-y:auto;border:1px solid #d2ddeb;border-top:0;border-radius:0 0 8px 8px}.recipient-option{display:flex;gap:8px;align-items:center;padding:7px 9px;border:1px solid #edf0f5;border-radius:7px}.recipient-option input{width:auto}.recipient-option small{color:#718096}</style></head><body><div class="layout"><aside class="side"><div class="logo">Школьные рассылки<small>MAX • локально</small></div><nav><button class="active" data-view="home">Обзор</button><button data-view="schools">Школы и классы</button><button data-view="contacts">Контакты КР/РК</button><button data-view="import">Импорт таблицы</button><button data-view="campaign">Новая рассылка</button></nav></aside><main class="content"><div class="top"><div><h1 id="title">Обзор</h1><div class="muted">КР и РК по классам школы</div></div></div><div id="notice"></div>
-<section id="home" class="view active"><div class="stats"><div class="stat"><label>Школы</label><b id="schoolCount">0</b></div><div class="stat"><label>Классы</label><b id="classCount">0</b></div><div class="stat"><label>Контакты КР</label><b id="krCount">0</b></div><div class="stat"><label>Контакты РК</label><b id="rkCount">0</b></div></div><div class="panel"><h2>Как начать</h2><p class="muted">1. Импортируйте контакты. 2. Создайте рассылку. 3. Откройте её задания, подготовьте текст в MAX и вручную подтвердите результат.</p><button class="primary" onclick="show('campaign')">Создать рассылку</button></div></section>
-<section id="schools" class="view"><div class="panel"><div class="row"><h2 style="margin-right:auto">Школы и классы</h2><button class="secondary" onclick="showAddClass()">Добавить школу/класс</button></div><div id="schoolList"></div></div><div id="classForm" class="panel hidden"><h2>Добавить класс</h2><div class="row"><input id="schoolName" placeholder="Название школы"><input id="className" placeholder="Класс, например 5А"><button class="primary" onclick="addClass()">Сохранить</button></div></div></section>
-<section id="contacts" class="view"><div class="panel"><div class="row"><h2 style="margin-right:auto">Контакты КР и РК</h2><button class="secondary" onclick="loadContacts()">Обновить</button><button class="danger" onclick="deleteSelectedContacts()">Удалить выделенные</button></div><p class="muted">Каждый класс хранит КР и РК отдельно. Отметьте контакты для массового удаления.</p><div class="table"><table><thead><tr><th><input id="selectAllContacts" type="checkbox" onchange="toggleAllContacts(this.checked)" aria-label="Выбрать все контакты"></th><th>Школа</th><th>Класс</th><th>Роль</th><th>ФИО</th><th>Телефон</th><th>Действия</th></tr></thead><tbody id="contactRows"></tbody></table></div></div></section>
-<section id="import" class="view"><div class="panel"><h2>Импорт данных школы</h2><p class="muted">Поддерживаются XLSX и CSV. В таблице обязательны: «класс», «фио КР», «телефон КР», «фио РК», «телефон РК». Школу выберите ниже, если её нет отдельным столбцом.</p><div class="row"><select id="importSchool"><option value="">Выберите школу</option></select><input id="newImportSchool" placeholder="или введите новую школу"></div><div class="drop" style="margin-top:12px"><input id="file" type="file" accept=".xlsx,.csv"><label for="file">Выберите Excel/CSV файл</label><div id="fileName" class="muted"></div></div><button id="previewBtn" class="primary hidden" style="margin-top:12px" onclick="preview()">Показать данные</button><div id="importStep" class="hidden"><h3>Сопоставление столбцов</h3><div id="mapping" class="mapping"></div><label>Поведение дубликатов</label><select id="duplicate"><option value="skip">Пропустить существующие контакты</option><option value="update">Обновить существующие контакты</option><option value="new_only">Только новые</option></select><div class="preview table"><table><thead id="head"></thead><tbody id="rows"></tbody></table></div><button class="primary" style="margin-top:12px" onclick="confirmImport()">Импортировать</button></div><div id="importResult"></div></div></section>
-<section id="campaign" class="view"><div class="grid"><div class="panel"><h2>Новая рассылка</h2><label>Название</label><input id="campaignName" placeholder="Например: Собрание 15 сентября"><label>Школы</label><details class="school-picker"><summary>Выбрать школы</summary><div id="campaignSchools" class="recipient-list"></div></details><label>Сообщение КР</label><textarea id="messageKR" placeholder="Здравствуйте, {name}!"></textarea><label>Сообщение РК</label><textarea id="messageRK" placeholder="Здравствуйте, {name}!"></textarea><button class="primary" style="margin-top:12px" onclick="createCampaign()">Создать рассылку</button></div><div class="panel"><h2>Получатели</h2><div id="recipientCount" class="muted">Выберите одну или несколько школ.</div><div class="row"><label class="check"><input id="selectAllRecipients" type="checkbox" onchange="toggleAllRecipients(this.checked)"> Выбрать всех получателей</label></div><div id="recipientList"></div><p class="muted">После создания рассылка появится ниже. Откройте её задания, подготовьте текст в MAX и сохраните результат.</p></div></div><div id="campaignBelow" class="panel hidden"><div class="row"><h2 style="margin-right:auto">Мои рассылки</h2><button class="secondary" onclick="toggleAllCampaigns(true)">Выделить все</button><button class="danger" onclick="deleteSelectedCampaigns()">Удалить выделенные</button></div><div class="table"><table><thead><tr><th><input type="checkbox" onchange="toggleAllCampaigns(this.checked)"></th><th>Рассылка</th><th>Школа</th><th>Статус</th><th>Действия</th></tr></thead><tbody id="campaignRowsBelow"></tbody><tbody id="campaignRows" class="hidden"></tbody></table></div></div><div id="campaignDetails" class="panel hidden"></div></section>
-</main></div>
-<script>
-const $=id=>document.getElementById(id),S={schools:[],clients:[],campaigns:[],rows:[],headers:[],openCampaignId:null,selectedTaskId:null,pollTimer:null,selectedSchoolIds:[],selectedClientIds:[],selectedContactIds:[],autoSelectRecipients:false,statusEditing:false,bulkPreparing:false};const explainError=(status,body)=>{if(body&&typeof body.detail==="string")return body.detail;if(status===401)return"Сессия оператора истекла. Обновите страницу и войдите снова.";if(status===404)return"Запрошенный объект не найден.";if(status>=500)return"Сервер временно не смог выполнить операцию. Подробности записаны в журнале.";return"Операция не выполнена.";};const authHeader=()=>{const p=sessionStorage.getItem("op_pass");return p?{Authorization:"Basic "+btoa("operator:"+p)}:{}};
-const api=async(p,o={},_retry=true)=>{const headers=o.body instanceof FormData?{...authHeader(),...(o.headers||{})}:{"Content-Type":"application/json",...authHeader(),...(o.headers||{})};let r;try{r=await fetch("/api"+p,{...o,headers})}catch(e){throw Error("Нет соединения с локальным сервером. Убедитесь, что приложение запущено.")}let body;try{body=await r.json()}catch(e){body=null}if(r.status===401&&_retry){const pass=prompt("Введите пароль оператора:");if(pass===null)throw Error(explainError(401,body));sessionStorage.setItem("op_pass",pass);return api(p,o,false)}if(!r.ok)throw Error(explainError(r.status,body));return body};const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));const msg=(t,e=false)=>{let n=$("notice");n.className=e?"notice error":"notice";n.textContent=t;if(!e)setTimeout(()=>{n.textContent="";n.className=""},7000)};
-function show(id){if(id!=="campaign"){clearInterval(S.pollTimer);S.pollTimer=null}document.querySelectorAll(".view").forEach(x=>x.classList.toggle("active",x.id===id));document.querySelectorAll("nav button").forEach(x=>x.classList.toggle("active",x.dataset.view===id));$("title").textContent=document.querySelector(`[data-view="${id}"]`).textContent;if(id==="schools")renderSchools();if(id==="contacts")loadContacts();if(id==="campaign"){loadRecipients();loadCampaigns().then(syncCampaignBelow).catch(e=>msg(e.message,true))}}
-document.querySelectorAll("nav button").forEach(x=>x.onclick=()=>show(x.dataset.view));function fillSchools(){$("importSchool").innerHTML='<option value="">Выберите школу</option>'+S.schools.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");$("campaignSchools").innerHTML=S.schools.length?S.schools.map(s=>`<label class="recipient-option"><input type="checkbox" value="${s.id}" ${S.selectedSchoolIds.includes(s.id)?"checked":""} onchange="selectSchool(${s.id},this.checked)"><span>${esc(s.name)}</span></label>`).join(""):"<span class='muted'>Школ пока нет</span>"}
-async function loadSchools(){S.schools=await api("/schools");fillSchools();let classes=S.schools.reduce((n,s)=>n+s.classes.length,0);$("schoolCount").textContent=S.schools.length;$("classCount").textContent=classes;renderSchools()}
-function renderSchools(){$("schoolList").innerHTML=S.schools.length?S.schools.map(s=>`<details class="panel" open><summary class="row" style="cursor:pointer"><b style="margin-right:auto">${esc(s.name)}</b><span class="muted">${s.classes.length} кл.</span></summary><div class="action-group" style="margin:10px 0"><button class="secondary" onclick="editSchool(${s.id})">Изменить школу</button><button class="danger" onclick="deleteSchool(${s.id})">Удалить школу</button></div>${s.classes.length?s.classes.map(c=>`<details style="margin:8px 0 8px 12px;padding:9px;border:1px solid #edf0f5;border-radius:8px"><summary style="cursor:pointer"><b>${esc(c.name)}</b> <span class="muted">(${c.contacts.length} контактов)</span></summary><div class="action-group" style="margin:8px 0"><button class="secondary" onclick="editClass(${c.id})">Изменить класс</button><button class="danger" onclick="deleteClass(${c.id})">Удалить класс</button></div>${c.contacts.length?`<div class="table"><table><thead><tr><th>Роль</th><th>Контакт</th><th>Телефон</th><th></th></tr></thead><tbody>${c.contacts.map(contact=>`<tr><td><span class="badge">${contact.role==="KR"?"КР":"РК"}</span></td><td>${esc(contact.name)}</td><td>${esc(contact.phone||"—")}</td><td><button class="secondary" onclick="editContact(${contact.id})">Изменить</button> <button class="danger" onclick="deleteContact(${contact.id})">Удалить</button></td></tr>`).join("")}</tbody></table></div>`:"<p class='muted'>Контактов пока нет</p>"}</details>`).join(""):"<p class='muted'>Классов пока нет</p>"}</details>`).join(""):"<div class='empty'>Школ пока нет. Добавьте школу и класс или импортируйте таблицу.</div>"}
-function showAddClass(){$("classForm").classList.remove("hidden");$("schoolName").focus()}async function addClass(){try{await api("/classes",{method:"POST",body:JSON.stringify({school_name:$("schoolName").value,class_name:$("className").value})});$("schoolName").value=$("className").value="";$("classForm").classList.add("hidden");await loadSchools();msg("Школа и класс сохранены")}catch(e){msg(e.message,true)}}
-async function editSchool(id){let s=S.schools.find(x=>x.id===id),name=prompt("Название школы:",s?.name||"");if(name===null)return;try{await api(`/schools/${id}`,{method:"PATCH",body:JSON.stringify({name})});await loadSchools();msg("Школа изменена")}catch(e){msg(e.message,true)}}
-async function deleteSchool(id){if(!confirm("Удалить школу?"))return;try{await api(`/schools/${id}`,{method:"DELETE"});await loadSchools();msg("Школа удалена")}catch(e){msg(e.message,true)}}
-async function editClass(id){let item=S.schools.flatMap(s=>s.classes.map(c=>({...c,school:s}))).find(x=>x.id===id),name=prompt("Название класса:",item?.name||"");if(name===null)return;try{await api(`/classes/${id}`,{method:"PATCH",body:JSON.stringify({name})});await loadSchools();msg("Класс изменён")}catch(e){msg(e.message,true)}}
-async function deleteClass(id){if(!confirm("Удалить класс?"))return;try{await api(`/classes/${id}`,{method:"DELETE"});await loadSchools();msg("Класс удалён")}catch(e){msg(e.message,true)}}
-function normalizeHeader(value){return String(value||"").toLowerCase().replace(/ё/g,"е").replace(/[^а-яa-z0-9]+/g," ").trim()}
-function detectField(header){let h=normalizeHeader(header);let has=(...terms)=>terms.some(term=>h.includes(term));if(has("класс","class","класс"))return"class_name";if(has("кр фио","фио кр","ф и о кр","красный руководитель","кр руководитель"))return"kr_name";if(has("кр телефон","телефон кр","тел кр","номер кр"))return"kr_phone";if(has("рк фио","фио рк","ф и о рк","родительский комитет","рк руководитель"))return"rk_name";if(has("рк телефон","телефон рк","тел рк","номер рк"))return"rk_phone";return""}
-$("file").onchange=()=>{let f=$("file").files[0];$("fileName").textContent=f?`${f.name} (${Math.round(f.size/1024)} КБ)`:"";$("previewBtn").classList.toggle("hidden",!f)};async function preview(){try{let fd=new FormData;fd.append("file",$("file").files[0]);let r=await api("/imports/preview",{method:"POST",body:fd});S.rows=r.rows;S.headers=r.headers;let detected=S.headers.map(detectField),missing=["class_name","kr_name","kr_phone","rk_name","rk_phone"].filter(f=>!detected.includes(f));$("mapping").innerHTML=S.headers.map((h,i)=>`<div class="row"><span>${esc(h)}${detected[i]?` <span class="badge ok">определено</span>`:""}</span><select data-col="${esc(h)}"><option value="">Не использовать</option><option value="class_name">Класс</option><option value="kr_name">ФИО КР</option><option value="kr_phone">Телефон КР</option><option value="rk_name">ФИО РК</option><option value="rk_phone">Телефон РК</option></select></div>`).join("");document.querySelectorAll("#mapping select").forEach((x,i)=>x.value=detected[i]);$("mapping").insertAdjacentHTML("beforebegin",missing.length?`<div class="notice error">Не удалось автоматически определить: ${missing.map(x=>({"class_name":"класс","kr_name":"ФИО КР","kr_phone":"телефон КР","rk_name":"ФИО РК","rk_phone":"телефон РК"}[x])).join(", ")}. Проверьте сопоставление ниже.</div>`:`<div class="notice">Все нужные столбцы определены автоматически. Проверьте их перед импортом.</div>`);$("head").innerHTML="<tr>"+S.headers.map(h=>`<th>${esc(h)}</th>`).join("")+"</tr>";$("rows").innerHTML=S.rows.slice(0,10).map(r=>"<tr>"+S.headers.map(h=>`<td>${esc(r[h])}</td>`).join("")+"</tr>").join("");$("importStep").classList.remove("hidden")}catch(e){msg(e.message,true)}}
-function selectedImportSchoolName(){const typed=$("newImportSchool").value.trim();if(typed)return typed;const sel=$("importSchool");if(!sel.value)return"";return sel.options[sel.selectedIndex].text.trim()}
-async function confirmImport(){try{let mapping={};document.querySelectorAll("#mapping select").forEach(x=>{if(x.value)mapping[x.dataset.col]=x.value});let school=selectedImportSchoolName();if(!school)return msg("Выберите или введите школу",true);let r=await api("/imports/school-contacts",{method:"POST",body:JSON.stringify({rows:S.rows,mapping,school_name:school,duplicate_mode:$("duplicate").value})});$("importResult").innerHTML=`<div class="notice">Импорт завершён: добавлено ${r.created}, обновлено ${r.updated}, пропущено ${r.skipped}.</div>`;await loadSchools();await loadRecipients()}catch(e){msg(e.message,true)}}
-function selectSchool(id,checked){if(checked&&!S.selectedSchoolIds.includes(id))S.selectedSchoolIds.push(id);if(!checked)S.selectedSchoolIds=S.selectedSchoolIds.filter(x=>x!==id);S.autoSelectRecipients=true;loadRecipients()}
-async function loadRecipients(){if(!S.selectedSchoolIds.length){S.clients=[];S.selectedClientIds=[];$("recipientCount").textContent="Выберите одну или несколько школ.";$("recipientList").innerHTML="";return}S.clients=[];for(const schoolId of S.selectedSchoolIds)S.clients.push(...await api(`/clients?school_id=${schoolId}`));let available=S.clients.filter(x=>!x.opted_out);S.selectedClientIds=S.autoSelectRecipients?available.map(x=>x.id):S.selectedClientIds.filter(id=>available.some(c=>c.id===id));S.autoSelectRecipients=false;$("recipientCount").innerHTML=`Выбрано: <b>${S.selectedClientIds.length}</b> из ${available.length} доступных контактов`;$("recipientList").innerHTML=available.length?available.map(c=>`<label class="recipient-option"><input type="checkbox" class="recipient-check" value="${c.id}" ${S.selectedClientIds.includes(c.id)?"checked":""} onchange="selectRecipient(${c.id},this.checked)"><span>${esc(c.name)} <small>${esc((S.schools.find(s=>s.id===c.school_id)||{}).name||"")} · ${c.role==="KR"?"КР":"РК"}</small></span></label>`).join(""):"<span class='muted'>В выбранных школах нет доступных контактов.</span>";$("selectAllRecipients").checked=available.length>0&&S.selectedClientIds.length===available.length;$("krCount").textContent=S.clients.filter(x=>x.role==="KR").length;$("rkCount").textContent=S.clients.filter(x=>x.role==="RK").length}
-function selectRecipient(id,checked){if(checked&&!S.selectedClientIds.includes(id))S.selectedClientIds.push(id);if(!checked)S.selectedClientIds=S.selectedClientIds.filter(x=>x!==id);loadRecipients()}
-function toggleAllRecipients(checked){S.selectedClientIds=checked?S.clients.filter(x=>!x.opted_out).map(x=>x.id):[];loadRecipients()}
-async function loadContacts(){try{let contacts=await api("/clients");S.clients=contacts;S.selectedContactIds=S.selectedContactIds.filter(id=>contacts.some(c=>c.id===id));let schoolById=Object.fromEntries(S.schools.map(s=>[s.id,s]));$("contactRows").innerHTML=contacts.length?contacts.map(c=>{let school=schoolById[c.school_id],klass=school?.classes.find(x=>x.id===c.class_id);return `<tr><td><input class="contact-check" type="checkbox" value="${c.id}" ${S.selectedContactIds.includes(c.id)?"checked":""} onchange="selectContact(${c.id},this.checked)" aria-label="Выбрать контакт ${esc(c.name)}"></td><td>${esc(school?.name||"—")}</td><td>${esc(klass?.name||"—")}</td><td><span class="badge">${c.role==="KR"?"КР":"РК"}</span></td><td>${esc(c.name)}</td><td>${esc(c.phone||"—")}</td><td><button class="secondary" onclick="editContact(${c.id})">Изменить</button> <button class="danger" onclick="deleteContact(${c.id})">Удалить</button></td></tr>`}).join(""):"<tr><td colspan=7 class=empty>Контактов пока нет</td></tr>";$("selectAllContacts").checked=contacts.length>0&&S.selectedContactIds.length===contacts.length}catch(e){msg(e.message,true)}}
-function selectContact(id,checked){if(checked&&!S.selectedContactIds.includes(id))S.selectedContactIds.push(id);if(!checked)S.selectedContactIds=S.selectedContactIds.filter(x=>x!==id);$("selectAllContacts").checked=S.clients.length>0&&S.selectedContactIds.length===S.clients.length}
-function toggleAllContacts(checked){S.selectedContactIds=checked?S.clients.map(c=>c.id):[];document.querySelectorAll(".contact-check").forEach(x=>{x.checked=checked})}
-async function deleteSelectedContacts(){if(!S.selectedContactIds.length)return msg("Выберите хотя бы один контакт",true);if(!confirm(`Удалить выбранные контакты (${S.selectedContactIds.length})? Связанные задания рассылок также будут удалены.`))return;try{let r=await api("/clients/delete",{method:"POST",body:JSON.stringify({client_ids:S.selectedContactIds})});S.selectedContactIds=[];await loadSchools();await loadContacts();msg(`Удалено контактов: ${r.deleted}`)}catch(e){msg(e.message,true)}}
-async function editContact(id){let c=(await api("/clients")).find(x=>x.id===id);if(!c)return;let currentSchool=S.schools.find(s=>s.id===c.school_id),currentClass=currentSchool?.classes.find(x=>x.id===c.class_id),name=prompt("ФИО контакта:",c.name);if(name===null)return;let phone=prompt("Телефон:",c.phone||"");if(phone===null)return;let schoolName=prompt(`Школа (${S.schools.map(s=>s.name).join(", ")}):`,currentSchool?.name||"");if(schoolName===null)return;let school=S.schools.find(s=>s.name.toLowerCase()===schoolName.trim().toLowerCase());if(!school)return msg("Школа не найдена",true);let className=prompt(`Класс (${school.classes.map(x=>x.name).join(", ")}):`,currentClass?.name||"");if(className===null)return;let klass=school.classes.find(x=>x.name.toLowerCase()===className.trim().toLowerCase());if(!klass)return msg("Класс не найден в выбранной школе",true);let link=prompt("Ссылка на чат MAX (если есть):",c.chat_link||"");if(link===null)return;try{await api(`/clients/${id}`,{method:"PATCH",body:JSON.stringify({name,phone:phone||null,max_user_id:c.max_user_id,username:c.username,chat_link:link||null,consent_basis:c.consent_basis,opted_out:c.opted_out,school_id:school.id,class_id:klass.id,role:c.role,custom_fields:c.custom_fields||{}})});msg("Контакт обновлён");await loadSchools();loadContacts()}catch(e){msg(e.message,true)}}
-async function deleteContact(id){if(!confirm("Удалить контакт?"))return;try{await api(`/clients/${id}`,{method:"DELETE"});msg("Контакт удалён");await loadSchools();loadContacts()}catch(e){msg(e.message,true)}}
-function syncCampaignBelow(){let target=$("campaignRowsBelow"),panel=$("campaignBelow");if(!target)return;target.innerHTML=S.campaigns.map(c=>`<tr><td><input class="campaign-check" type="checkbox" value="${c.id}"></td><td><b>${esc(c.name)}</b><br><span class="muted">${new Date(c.created_at).toLocaleString()}</span></td><td>${esc((S.schools.find(s=>s.id===c.school_id)||{}).name||"—")}</td><td><span class="badge ${statusClass(c.status)}">${statusName(c.status)}</span></td><td class="action-group"><button class="secondary" onclick="openCampaign(${c.id})">Управлять</button><button class="primary" onclick="prepareAllDrafts(${c.id})">Создать черновики для всех</button><button class="danger" onclick="deleteCampaign(${c.id})">Удалить</button></td></tr>`).join("");panel.classList.toggle("hidden",!S.campaigns.length)}
-async function createCampaign(){try{if(!S.selectedSchoolIds.length)return msg("Выберите хотя бы одну школу",true);if(!S.selectedClientIds.length)return msg("Выберите хотя бы одного получателя",true);if(!$("messageKR").value.trim()&&!$("messageRK").value.trim())return msg("Введите хотя бы одно сообщение",true);let r=await api("/campaigns",{method:"POST",body:JSON.stringify({name:$("campaignName").value||"Рассылка классов",school_id:S.selectedSchoolIds.length===1?S.selectedSchoolIds[0]:null,message_kr:$("messageKR").value||null,message_rk:$("messageRK").value||null,message:$("messageKR").value||$("messageRK").value,client_ids:S.selectedClientIds})});msg(`Рассылка создана. Получателей: ${r.recipient_count}`);$("campaignName").value="";$("messageKR").value="";$("messageRK").value="";await loadCampaigns();syncCampaignBelow();show("campaign");openCampaign(r.id)}catch(e){msg(e.message,true)}}
-const statusNames={DRAFT:"Черновик",RUNNING:"В работе",WAITING_REVIEW:"Ожидает подтверждения",COMPLETED:"Завершена",PAUSED:"Приостановлена",CANCELLED:"Отменена",REQUIRES_REVIEW:"Ожидает проверки",CONTACT_NOT_FOUND:"Контакт не найден",MAX_ERROR:"Ошибка MAX",PENDING:"Ожидает",PROCESSING:"Обрабатывается",SENT:"Готово",FAILED:"Ошибка",UNKNOWN:"Неизвестно"};const statusName=s=>statusNames[s]||s;const statusClass=s=>["COMPLETED","SENT"].includes(s)?"ok":["FAILED","CANCELLED","CONTACT_NOT_FOUND","MAX_ERROR"].includes(s)?"error":"";const campaignSteps=c=>`<div class="campaign-step"><span class="${c.status!=="DRAFT"?"done":""}">1. Черновик</span><span class="${["RUNNING","WAITING_REVIEW","COMPLETED"].includes(c.status)?"done":""}">2. Подготовка</span><span class="${c.status==="COMPLETED"?"done":""}">3. Подтверждение</span></div>`;async function loadCampaigns(){S.campaigns=await api("/campaigns");let schoolById=Object.fromEntries(S.schools.map(s=>[s.id,s.name]));if($("campaignRows"))$("campaignRows").innerHTML=S.campaigns.length?S.campaigns.map(c=>`<tr><td><input class="campaign-check" type="checkbox" value="${c.id}"></td><td><b>${esc(c.name)}</b><br>${campaignSteps(c)}</td><td>${esc(schoolById[c.school_id]||"—")}</td><td>${new Date(c.created_at).toLocaleString()}</td><td><span class="badge ${statusClass(c.status)}">${statusName(c.status)}</span></td><td>${Object.entries(c.counts||{}).map(([k,v])=>`${statusName(k)}: ${v}`).join("<br>")||"Нет заданий"}</td><td class="action-group">${c.status==="DRAFT"?`<button class="primary" onclick="start(${c.id})">Начать</button>`:""}<button class="secondary" onclick="openCampaign(${c.id})">Задания</button><a class="secondary" href="/api/reports/${c.id}/export" target="_blank">CSV</a><button class="danger" onclick="deleteCampaign(${c.id})">Удалить</button></td></tr>`).join(""):"<tr><td colspan=7 class=empty>Рассылок пока нет</td></tr>";syncCampaignBelow()}
-async function openCampaign(id){try{show("campaign");S.openCampaignId=id;startCampaignPolling();let c=S.campaigns.find(x=>x.id===id),tasks=await api(`/campaigns/${id}/tasks`);$("campaignDetails").classList.remove("hidden");$("campaignDetails").innerHTML=`<div class="row"><h2 style="margin-right:auto">${esc(c.name)} — задания</h2><button class="secondary" onclick="refreshCampaign()">Обновить статусы</button><button class="primary" onclick="prepareAllDrafts(${id})">Создать черновики для всех</button></div>${campaignSteps(c)}<p class="muted">Статусы обновляются автоматически. Для ручного изменения выберите статус в строке. Автоматическая отправка отключена.</p><div class="table"><table><thead><tr><th>Получатель</th><th>Школа</th><th>Класс</th><th>Роль</th><th>Действия в MAX</th><th>Статус</th><th>Результат</th></tr></thead><tbody>${tasks.map(t=>`<tr data-task-id="${t.id}" class="campaign-task ${S.selectedTaskId===t.id?"selected-task":""}" onclick="selectTask(${t.id})"><td><b>${esc(t.client)}</b><br><span class="muted">${esc(t.phone||"Идентификатор не указан")}</span></td><td>${esc(t.school||"—")}</td><td>${esc(t.class_name||"—")}</td><td>${t.role==="KR"?"КР":"РК"}</td><td class="action-group">${c.mode==="manual"?`<button class="primary" onclick="event.stopPropagation();prepareMax(${t.id})">Подготовить в MAX</button>`:""}<button class="secondary" onclick="event.stopPropagation();openMaxChat(${t.id})">Открыть чат</button>${t.browser_prepared_at?"<span class='badge ok'>Готово</span>":""}${t.browser_error?`<span class="error-detail">${esc(t.browser_error)}</span>`:""}</td><td><span class="task-state ${statusClass(t.status)}">${statusName(t.status)}</span><br><span class="muted">${t.opened_at?"Чат открыт":"Чат не открыт"}</span><select class="status-editor" onclick="event.stopPropagation()" onfocus="S.statusEditing=true" onblur="S.statusEditing=false" onchange="updateTaskStatus(${t.id},this.value)">${["PENDING","PROCESSING","REQUIRES_REVIEW","CONTACT_NOT_FOUND","MAX_ERROR","SENT","FAILED","UNKNOWN","CANCELLED"].map(s=>`<option value="${s}" ${s===t.status?"selected":""}>${statusName(s)}</option>`).join("")}</select></td><td>${t.operator_confirmed_at?statusName(t.operator_result):c.mode==="manual"?`<select id="result-${t.id}" onclick="event.stopPropagation()"><option value="">Выберите результат</option><option value="sent">Отправлено</option><option value="failed">Не отправлено</option><option value="unknown">Неизвестно</option></select><button class="secondary" onclick="event.stopPropagation();confirmTask(${t.id})">Сохранить результат</button>`:statusName(t.status)}</td></tr>`).join("")}</tbody></table></div>`}catch(e){msg(e.message,true)}}
-function selectTask(id){S.selectedTaskId=id;document.querySelectorAll(".campaign-task").forEach(row=>row.classList.toggle("selected-task",Number(row.dataset.taskId)===id));}
-function startCampaignPolling(){clearInterval(S.pollTimer);S.pollTimer=setInterval(()=>{if(S.openCampaignId&&$("campaign").classList.contains("active")&&!S.statusEditing)refreshCampaign().catch(()=>{})},3000)}
-async function refreshCampaign(){if(!S.openCampaignId)return;await loadCampaigns();await openCampaign(S.openCampaignId)}
-async function updateTaskStatus(id,status){try{await api(`/tasks/${id}/status`,{method:"PATCH",body:JSON.stringify({status})});S.selectedTaskId=id;await refreshCampaign();msg("Статус задания обновлён")}catch(e){msg(e.message,true)}}
-function copyText(text){navigator.clipboard.writeText(text);msg("Текст скопирован")}
-async function openChat(id,encodedUrl){const url=decodeURIComponent(encodedUrl);window.open(url,"_blank","noopener,noreferrer");try{await api(`/tasks/${id}/opened`,{method:"POST"});msg("Чат открыт в новой вкладке; факт открытия сохранён");openCampaign(S.openCampaignId)}catch(e){msg(e.message,true)}}
-async function openMaxChat(id){S.selectedTaskId=id;try{let result=await api(`/tasks/${id}/open-max`,{method:"POST"});msg(`Чат открыт для ${result.client}. Текст не вставлялся.`);await refreshCampaign()}catch(e){await refreshCampaign();msg(e.message,true)}}
-async function prepareMax(id){if(S.bulkPreparing)return;S.selectedTaskId=id;try{let result=await api(`/tasks/${id}/prepare-max`,{method:"POST"});msg(`Текст вставлен и проверен для ${result.client}. Отправка не выполнялась.`);await refreshCampaign()}catch(e){await refreshCampaign();msg(e.message,true)}}
-async function prepareAllDrafts(campaignId){if(S.bulkPreparing)return;if(!confirm("Последовательно открыть чаты и создать черновики для всех получателей этой рассылки? Отправка выполняться не будет."))return;S.bulkPreparing=true;S.openCampaignId=campaignId;clearInterval(S.pollTimer);let tasks;try{tasks=await api(`/campaigns/${campaignId}/tasks`)}catch(e){S.bulkPreparing=false;msg(e.message,true);return}let prepared=0,failed=0;for(let index=0;index<tasks.length;index++){let task=tasks[index];S.selectedTaskId=task.id;msg(`Подготовка черновика ${index+1} из ${tasks.length}: ${task.client}`);try{await api(`/tasks/${task.id}/prepare-max`,{method:"POST"});prepared++}catch(e){failed++;console.error(`Ошибка подготовки задания ${task.id}:`,e)}}S.bulkPreparing=false;await refreshCampaign();msg(`Готово: черновики созданы для ${prepared} из ${tasks.length}. Ошибок: ${failed}. Отправка не выполнялась.`,failed>0)}
-async function deleteCampaign(id){if(!confirm("Удалить рассылку и все её задания?"))return;try{await api(`/campaigns/${id}`,{method:"DELETE"});$("campaignDetails").classList.add("hidden");msg("Рассылка удалена");await loadCampaigns();syncCampaignBelow()}catch(e){msg(e.message,true)}}
-function toggleAllCampaigns(checked){document.querySelectorAll(".campaign-check").forEach(x=>x.checked=checked)}
-async function deleteSelectedCampaigns(){let ids=[...document.querySelectorAll(".campaign-check:checked")].map(x=>Number(x.value));if(!ids.length)return msg("Сначала выделите рассылки",true);if(!confirm(`Удалить выделенные рассылки (${ids.length}) и их задания?`))return;try{let result=await api("/campaigns/delete",{method:"POST",body:JSON.stringify({campaign_ids:ids})});msg(`Удалено рассылок: ${result.deleted}`);$("campaignDetails").classList.add("hidden");await loadCampaigns()}catch(e){msg(e.message,true)}}
-async function markOpened(id){try{await api(`/tasks/${id}/opened`,{method:"POST"})}catch(e){msg(e.message,true)}}
-async function confirmTask(id){let result=$(`result-${id}`).value;if(!result)return msg("Выберите результат перед подтверждением",true);try{await api(`/tasks/${id}/confirm`,{method:"POST",body:JSON.stringify({result})});msg("Результат сохранён");openCampaign(S.openCampaignId)}catch(e){msg(e.message,true)}}
-async function start(id){if(!confirm("Запустить кампанию после проверки двух текстов?"))return;try{await api(`/campaigns/${id}/start`,{method:"POST"});msg("Кампания запущена");loadCampaigns()}catch(e){msg(e.message,true)}}
-async function setupPassword(){const pass=prompt("Задайте пароль оператора (минимум 8 символов):");if(!pass)return;try{await api("/auth/setup",{method:"POST",body:JSON.stringify({password:pass})});sessionStorage.setItem("op_pass",pass);msg("Пароль настроен")}catch(e){msg(e.message,true)}}
-async function boot(){try{await loadSchools();await loadRecipients();await loadCampaigns()}catch(e){msg(e.message,true)}}boot();
-</script></body></html>
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Локальный интерфейс оператора школьных рассылок в MAX: школы, классы, контакты КР/РК, импорт таблиц и ручные рассылки.">
+  <title>Школьные рассылки MAX</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <a class="skip" href="#main">Перейти к содержимому</a>
+  <div class="app">
+    <aside class="sidebar" id="sidebar" aria-label="Основная навигация">
+      <div class="logo">Школьные рассылки<small>MAX • локальный режим</small></div>
+      <nav class="nav">
+        <button type="button" data-route="home" class="active" aria-current="page">
+          <span class="nav-icon" aria-hidden="true">◔</span><span class="nav-label">Обзор</span>
+        </button>
+        <button type="button" data-route="schools">
+          <span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">Школы и классы</span>
+          <span class="nav-count" id="navCountSchools">0</span>
+        </button>
+        <button type="button" data-route="contacts">
+          <span class="nav-icon" aria-hidden="true">☎</span><span class="nav-label">Контакты КР/РК</span>
+          <span class="nav-count" id="navCountContacts">0</span>
+        </button>
+        <button type="button" data-route="import">
+          <span class="nav-icon" aria-hidden="true">⇪</span><span class="nav-label">Импорт таблицы</span>
+        </button>
+        <button type="button" data-route="campaigns">
+          <span class="nav-icon" aria-hidden="true">✉</span><span class="nav-label">Рассылки</span>
+          <span class="nav-count" id="navCountCampaigns">0</span>
+        </button>
+        <button type="button" data-route="settings">
+          <span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Настройки</span>
+        </button>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="row"><span class="pill" id="sideHealthPill"><span class="dot"></span>сервер: проверка</span></div>
+        <span class="hint">Автоматическая отправка отключена: оператор подтверждает каждое сообщение вручную.</span>
+      </div>
+    </aside>
+    <div class="scrim hidden" id="scrim"></div>
+
+    <main class="main" id="main">
+      <header class="topbar">
+        <button type="button" class="btn icon menu-btn" id="menuBtn" aria-label="Открыть меню">☰</button>
+        <div class="titles">
+          <h1 id="viewTitle">Обзор</h1>
+          <p class="muted" id="viewHint">Сводка по школам, контактам и рассылкам</p>
+        </div>
+        <div class="topbar-tools">
+          <span class="pill" id="healthPill"><span class="dot"></span>проверка</span>
+          <button type="button" class="btn icon" id="themeBtn" aria-label="Переключить тему">◐</button>
+          <button type="button" class="btn ghost" id="authBtn">Войти</button>
+        </div>
+      </header>
+
+      <div class="container">
+        <section class="view" id="route-home">
+          <div class="kpi-grid">
+            <div class="kpi"><label>Школы</label><b id="kpiSchools">0</b><small id="kpiClassesHint">классов: 0</small></div>
+            <div class="kpi"><label>Контакты КР</label><b id="kpiKr">0</b><small>классные руководители</small></div>
+            <div class="kpi"><label>Контакты РК</label><b id="kpiRk">0</b><small>родительские комитеты</small></div>
+            <div class="kpi"><label>Рассылки</label><b id="kpiCampaigns">0</b><small id="kpiCampaignsHint">в работе: 0</small></div>
+            <div class="kpi"><label>Ждут подтверждения</label><b id="kpiReview">0</b><small>заданий в ручном режиме</small></div>
+          </div>
+
+          <div class="grid-2" style="margin-top:16px">
+            <div class="card">
+              <div class="card-head"><h2>Быстрый старт</h2></div>
+              <ol class="muted" style="padding-left:18px;margin:0 0 12px">
+                <li>Импортируйте таблицу школы с контактами КР и РК.</li>
+                <li>Создайте рассылку: текст для КР и текст для РК.</li>
+                <li>В заданиях подготовьте черновик в MAX и отправьте сообщение вручную.</li>
+                <li>Сохраните результат и при необходимости добавьте примечание.</li>
+              </ol>
+              <div class="row">
+                <button type="button" class="btn" data-route="import">Импортировать таблицу</button>
+                <button type="button" class="btn primary" data-route="campaigns">Создать рассылку</button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head"><h2>Состояние системы</h2><span class="spacer"></span>
+                <button type="button" class="btn small ghost" data-action="check-health">Проверить</button>
+              </div>
+              <dl class="kv">
+                <dt>Сервер</dt><dd id="homeStatusServer">проверка…</dd>
+                <dt>Воркер доставки</dt><dd id="homeStatusWorker">—</dd>
+                <dt>Интеграция</dt><dd id="homeStatusIntegration">—</dd>
+                <dt>Режим</dt><dd id="homeStatusMode">—</dd>
+              </dl>
+              <p class="muted" style="margin-top:12px">MAX открывается в отдельном профиле браузера. Текст вставляется в поле ввода, но не отправляется автоматически.</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h2>Последние рассылки</h2><span class="spacer"></span>
+              <button type="button" class="btn small ghost" data-action="refresh-campaigns">Обновить</button>
+            </div>
+            <div id="recentCampaigns"></div>
+          </div>
+        </section>
+
+        <section class="view hidden" id="route-schools">
+          <div class="card">
+            <div class="card-head">
+              <h2>Школы и классы</h2><span class="spacer"></span>
+              <div class="search" style="min-width:220px">
+                <label class="sr-only" for="schoolSearch">Поиск школы или класса</label>
+                <input id="schoolSearch" type="search" placeholder="Поиск школы или класса">
+              </div>
+              <button type="button" class="btn ghost" id="schoolsRefresh">Обновить</button>
+              <button type="button" class="btn primary" id="btnAddSchool">Добавить школу/класс</button>
+            </div>
+            <p class="muted card-sub" id="schoolsInfo">Загрузка…</p>
+            <div id="schoolList" class="stack"></div>
+          </div>
+        </section>
+        <section class="view hidden" id="route-contacts">
+          <div class="card">
+            <div class="card-head">
+              <h2>Контакты КР и РК</h2><span class="spacer"></span>
+              <button type="button" class="btn primary" id="btnAddContact">Добавить контакт</button>
+              <button type="button" class="btn ghost" id="contactsRefresh">Обновить</button>
+            </div>
+            <div class="filters">
+              <div class="search">
+                <label class="sr-only" for="contactSearch">Поиск по ФИО или телефону</label>
+                <input id="contactSearch" type="search" placeholder="ФИО или телефон">
+              </div>
+              <div>
+                <label class="sr-only" for="contactSchool">Школа</label>
+                <select id="contactSchool"><option value="">Все школы</option></select>
+              </div>
+              <div>
+                <label class="sr-only" for="contactClass">Класс</label>
+                <select id="contactClass"><option value="">Все классы</option></select>
+              </div>
+              <div>
+                <label class="sr-only" for="contactRole">Роль</label>
+                <select id="contactRole">
+                  <option value="">Все роли</option>
+                  <option value="KR">КР</option>
+                  <option value="RK">РК</option>
+                </select>
+              </div>
+              <div>
+                <label class="sr-only" for="contactOptOut">Согласие</label>
+                <select id="contactOptOut">
+                  <option value="">Все контакты</option>
+                  <option value="false">Только активные</option>
+                  <option value="true">Только отписавшиеся</option>
+                </select>
+              </div>
+              <div class="row end">
+                <button type="button" class="btn ghost" id="contactReset">Сбросить фильтры</button>
+              </div>
+            </div>
+
+            <div class="row" id="contactBulk" style="margin:12px 0" hidden>
+              <span class="pill" id="contactSelectedCount">Выбрано: 0</span>
+              <button type="button" class="btn small ghost" id="btnExportContacts">Скачать CSV</button>
+              <button type="button" class="btn small danger" id="btnBulkDeleteContacts">Удалить выделенные</button>
+              <button type="button" class="btn small ghost" id="btnClearContactSelection">Снять выделение</button>
+            </div>
+
+            <p class="muted card-sub" id="contactsInfo">Загрузка…</p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th><input type="checkbox" id="selectAllContacts" aria-label="Выбрать все контакты"></th>
+                    <th>ФИО</th><th>Роль</th><th>Школа</th><th>Класс</th><th>Телефон</th><th>MAX</th><th>Действия</th>
+                  </tr>
+                </thead>
+                <tbody id="contactRows"></tbody>
+              </table>
+            </div>
+            <div class="pager">
+              <button type="button" class="btn small ghost" id="contactPrev">Назад</button>
+              <button type="button" class="btn small ghost" id="contactNext">Вперёд</button>
+              <label class="check muted">Строк на странице
+                <select id="contactPageSize" style="width:auto">
+                  <option value="25">25</option><option value="50" selected>50</option>
+                  <option value="100">100</option><option value="200">200</option>
+                </select>
+              </label>
+              <span class="muted" id="contactPageInfo"></span>
+            </div>
+          </div>
+        </section>
+        <section class="view hidden" id="route-import">
+          <div class="card">
+            <div class="card-head"><h2>Импорт таблицы школы</h2></div>
+            <div class="stepper" id="importStepper">
+              <span class="active" data-step="1">1. Файл</span>
+              <span data-step="2">2. Сопоставление</span>
+              <span data-step="3">3. Результат</span>
+            </div>
+            <p class="muted">Поддерживаются XLSX и CSV. Ожидаемые столбцы: «класс», «ФИО КР», «телефон КР», «ФИО РК», «телефон РК». Школу выберите списком или введите новую — она будет создана автоматически.</p>
+
+            <div class="grid-2">
+              <div class="field">
+                <span>Школа <span class="req">*</span></span>
+                <select id="importSchoolSelect"><option value="">Выберите школу</option></select>
+              </div>
+              <div class="field">
+                <span>Новая школа (если нет в списке)</span>
+                <input id="importSchoolNew" placeholder="Например: Школа №12">
+              </div>
+            </div>
+
+            <div class="dropzone" id="importDrop" style="margin-top:14px">
+              <input id="importFile" type="file" accept=".xlsx,.xlsm,.csv">
+              <label for="importFile">Выберите Excel/CSV файл</label>
+              <div class="muted" id="importFileName">Файл не выбран. Можно перетащить файл в эту область.</div>
+            </div>
+            <div class="row" style="margin-top:12px">
+              <button type="button" class="btn primary" id="importPreviewBtn" disabled>Показать данные</button>
+              <button type="button" class="btn ghost" id="importReset">Сбросить</button>
+            </div>
+          </div>
+
+          <div class="card hidden" id="importStep">
+            <div class="card-head"><h2>Сопоставление столбцов</h2></div>
+            <div id="importWarnings"></div>
+            <div id="importMapping" class="mapping"></div>
+            <p class="muted">Повторяющиеся пары «класс + ФИО + роль» пропускаются сервером, чтобы не создавать дубликаты контактов.</p>
+            <div class="row" style="margin:14px 0 8px">
+              <h3>Предпросмотр данных</h3><span class="spacer"></span>
+              <span class="muted" id="importRowInfo"></span>
+              <button type="button" class="btn small ghost" id="importShowAll">Показать все строки</button>
+            </div>
+            <div class="table-wrap" style="max-height:320px">
+              <table>
+                <thead id="importHead"></thead>
+                <tbody id="importRows"></tbody>
+              </table>
+            </div>
+            <div class="row end" style="margin-top:14px">
+              <button type="button" class="btn primary" id="importRun">Импортировать контакты</button>
+            </div>
+            <div id="importResult" style="margin-top:12px"></div>
+          </div>
+        </section>
+        <section class="view hidden" id="route-campaigns">
+          <div class="card">
+            <div class="card-head"><h2>Новая рассылка</h2>
+              <span class="badge mute">ручной режим</span>
+            </div>
+            <div class="grid-2">
+              <div class="field">
+                <span>Название <span class="req">*</span></span>
+                <input id="campaignName" placeholder="Например: Собрание 15 сентября" maxlength="200">
+              </div>
+              <div class="field">
+                <span>Описание (необязательно)</span>
+                <input id="campaignDescription" placeholder="Комментарий для себя" maxlength="200">
+              </div>
+            </div>
+            <div class="grid-2" style="margin-top:12px">
+              <div class="field">
+                <span>Текст для КР <span class="req">*</span></span>
+                <textarea id="messageKR" placeholder="Здравствуйте, {name}! Напоминаю о собрании 15 сентября в 18:00." maxlength="4000"></textarea>
+                <small class="muted"><span id="msgCounterKR">0</span> / 4000 символов · доступна подстановка {name}</small>
+              </div>
+              <div class="field">
+                <span>Текст для РК <span class="req">*</span></span>
+                <textarea id="messageRK" placeholder="Здравствуйте, {name}! Просьба передать информацию родителям класса." maxlength="4000"></textarea>
+                <small class="muted"><span id="msgCounterRK">0</span> / 4000 символов · доступна подстановка {name}</small>
+              </div>
+            </div>
+            <div class="card-head" style="margin-top:14px">
+              <h3>Получатели</h3><span class="spacer"></span>
+              <button type="button" class="btn small ghost" id="btnSelectAllRecipients">Выбрать всех</button>
+              <button type="button" class="btn small ghost" id="btnClearRecipients">Снять выбор</button>
+            </div>
+            <div class="search" style="max-width:320px;margin-bottom:10px">
+              <label class="sr-only" for="recipientSearch">Поиск получателя</label>
+              <input id="recipientSearch" type="search" placeholder="Поиск по ФИО, школе или классу">
+            </div>
+            <div class="picker" id="campaignPicker"></div>
+            <div class="sticky-actions">
+              <span class="pill" id="campaignSelected">Выбрано получателей: 0</span>
+              <span class="muted" id="campaignSelectedBreakdown"></span>
+              <span class="spacer" style="flex:1"></span>
+              <button type="button" class="btn ghost" id="campaignPreviewBtn">Предпросмотр текста</button>
+              <button type="button" class="btn primary" id="campaignCreateBtn">Создать рассылку</button>
+            </div>
+            <div class="hidden" id="campaignPreviewWrap" style="margin-top:12px">
+              <h3>Предпросмотр первого получателя</h3>
+              <pre class="message" id="campaignPreview"></pre>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h2>Мои рассылки</h2><span class="spacer"></span>
+              <div class="search" style="min-width:200px">
+                <label class="sr-only" for="campaignSearch">Поиск рассылки</label>
+                <input id="campaignSearch" type="search" placeholder="Поиск по названию">
+              </div>
+              <div>
+                <label class="sr-only" for="campaignStatusFilter">Статус рассылки</label>
+                <select id="campaignStatusFilter" style="width:auto">
+                  <option value="">Все статусы</option>
+                  <option value="DRAFT">Черновик</option>
+                  <option value="RUNNING">В работе</option>
+                  <option value="WAITING_REVIEW">Ожидает подтверждения</option>
+                  <option value="COMPLETED">Завершена</option>
+                  <option value="STOPPED">Остановлена</option>
+                </select>
+              </div>
+              <button type="button" class="btn ghost" id="campaignsRefresh">Обновить</button>
+            </div>
+            <div class="row" id="campaignBulk" style="margin-bottom:10px" hidden>
+              <span class="pill" id="campaignSelectedCount">Выбрано: 0</span>
+              <button type="button" class="btn small danger" id="btnBulkDeleteCampaigns">Удалить выделенные</button>
+              <button type="button" class="btn small ghost" id="btnClearCampaignSelection">Снять выделение</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th><input type="checkbox" id="selectAllCampaigns" aria-label="Выбрать все рассылки"></th>
+                    <th>Рассылка</th><th>Школа</th><th>Создана</th><th>Прогресс</th><th>Действия</th>
+                  </tr>
+                </thead>
+                <tbody id="campaignRows"></tbody>
+              </table>
+            </div>
+            <div class="pager">
+              <button type="button" class="btn small ghost" id="campaignPrev">Назад</button>
+              <button type="button" class="btn small ghost" id="campaignNext">Вперёд</button>
+              <span class="muted" id="campaignPageInfo"></span>
+            </div>
+          </div>
+        </section>
+        <section class="view hidden" id="route-tasks">
+          <div class="card">
+            <div class="card-head">
+              <button type="button" class="btn small ghost" id="taskBack">← К рассылкам</button>
+              <h2 id="taskTitle">Задания рассылки</h2>
+              <span class="badge" id="taskStatusBadge">—</span>
+              <span class="spacer"></span>
+              <label class="check muted"><input type="checkbox" id="autoRefreshToggle" checked> автообновление</label>
+              <button type="button" class="btn small ghost" id="taskRefreshBtn">Обновить</button>
+              <a class="btn small ghost" id="taskExportLink" href="#" target="_blank" rel="noopener">Скачать CSV</a>
+              <button type="button" class="btn small danger" id="taskStopBtn">Остановить рассылку</button>
+            </div>
+            <dl class="kv" style="margin-bottom:12px">
+              <dt>Сообщения</dt><dd id="taskMessagesInfo">—</dd>
+              <dt>Обновлено</dt><dd id="taskUpdatedAt">—</dd>
+              <dt>Последний запрос</dt><dd id="taskLastError">ошибок нет</dd>
+            </dl>
+            <div class="row">
+              <div class="grow">
+                <div class="progress" id="taskProgress"><span style="width:0%"></span></div>
+              </div>
+              <span class="muted" id="taskProgressText">0 из 0 подтверждено</span>
+            </div>
+            <div class="chips" id="taskChips" style="margin-top:12px"></div>
+
+            <div class="row" style="margin:14px 0">
+              <button type="button" class="btn primary" id="taskBulkPrepare">Создать черновики для всех</button>
+              <button type="button" class="btn ghost" id="taskBulkOpen">Открыть чаты по списку</button>
+              <span class="pill" id="taskSelectedInfo" hidden>Задание выбрано</span>
+            </div>
+
+            <div class="filters">
+              <div class="search">
+                <label class="sr-only" for="taskSearch">Поиск задания</label>
+                <input id="taskSearch" type="search" placeholder="ФИО или телефон">
+              </div>
+              <div>
+                <label class="sr-only" for="taskRoleFilter">Роль</label>
+                <select id="taskRoleFilter">
+                  <option value="">Все роли</option><option value="KR">КР</option><option value="RK">РК</option>
+                </select>
+              </div>
+              <div>
+                <label class="sr-only" for="taskSort">Сортировка</label>
+                <select id="taskSort">
+                  <option value="id">По порядку</option>
+                  <option value="status">По статусу</option>
+                  <option value="name">По ФИО</option>
+                  <option value="school">По школе</option>
+                </select>
+              </div>
+              <label class="check muted">Строк на странице
+                <select id="taskPageSize" style="width:auto">
+                  <option value="25">25</option><option value="50" selected>50</option><option value="100">100</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div class="split">
+            <div class="card">
+              <div class="card-head">
+                <h3>Задания</h3><span class="spacer"></span>
+                <span class="muted" id="taskListInfo">—</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Получатель</th><th>Школа</th><th>Класс</th><th>Роль</th>
+                      <th>MAX</th><th>Статус</th><th>Результат</th>
+                    </tr>
+                  </thead>
+                  <tbody id="taskRows"></tbody>
+                </table>
+              </div>
+              <div class="pager">
+                <button type="button" class="btn small ghost" id="taskPrev">Назад</button>
+                <button type="button" class="btn small ghost" id="taskNext">Вперёд</button>
+                <span class="muted" id="taskPageInfo"></span>
+              </div>
+            </div>
+
+            <aside class="detail">
+              <div class="card" id="taskDetail">
+                <h3>Карточка задания</h3>
+                <p class="muted">Выберите получателя в таблице, чтобы увидеть готовый текст, идентификаторы MAX и историю действий.</p>
+              </div>
+            </aside>
+          </div>
+        </section>
+        <section class="view hidden" id="route-settings">
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-head"><h2>Режим доставки</h2></div>
+              <p class="muted">Приложение работает только в ручном режиме: сообщение готовится в MAX, отправку выполняет оператор.</p>
+              <dl class="kv">
+                <dt>Текущий режим</dt><dd id="settingsMode">—</dd>
+                <dt>Воркер</dt><dd id="settingsWorker">—</dd>
+                <dt>Интеграция</dt><dd id="settingsIntegration">—</dd>
+              </dl>
+              <div class="row" style="margin-top:12px">
+                <button type="button" class="btn ghost" id="settingsSync">Синхронизировать режим</button>
+                <button type="button" class="btn ghost" id="settingsCheckHealth">Проверить сервер</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head"><h2>Доступ оператора</h2></div>
+              <p class="muted">Пароль хранится в базе в виде хеша. Сессия действует до закрытия вкладки — пароль не сохраняется на диске.</p>
+              <dl class="kv">
+                <dt>Статус сессии</dt><dd id="passwordStatus">—</dd>
+              </dl>
+              <div class="row" style="margin-top:12px">
+                <button type="button" class="btn primary" id="passwordSetup">Задать пароль оператора</button>
+                <button type="button" class="btn ghost" id="logoutBtn">Выйти</button>
+              </div>
+              <p class="muted" style="margin-top:10px">Пароль можно задать только один раз. Если пароль уже настроен, используйте кнопку «Войти» в шапке.</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h2>Внешний вид и поведение</h2></div>
+            <div class="filters">
+              <div class="field">
+                <span>Тема</span>
+                <select id="themeSelect">
+                  <option value="light">Светлая</option>
+                  <option value="dark">Тёмная</option>
+                </select>
+              </div>
+              <div class="field">
+                <span>Интервал автообновления заданий</span>
+                <select id="refreshInterval">
+                  <option value="0">Отключено</option>
+                  <option value="3000">3 секунды</option>
+                  <option value="5000">5 секунд</option>
+                  <option value="15000">15 секунд</option>
+                </select>
+              </div>
+              <div class="field">
+                <span>Строк на странице по умолчанию</span>
+                <select id="pageSizeDefault">
+                  <option value="25">25</option><option value="50">50</option>
+                  <option value="100">100</option><option value="200">200</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h2>Данные и приватность</h2></div>
+            <ul class="muted" style="margin:0;padding-left:18px">
+              <li>База данных, журналы и снимки страниц MAX остаются на этом компьютере.</li>
+              <li>В журнал пишутся только служебные операции; содержимое сообщений и телефоны не дублируются.</li>
+              <li>Перед массовой рассылкой проверяйте текст в карточке задания — он уже подставлен с ФИО получателя.</li>
+              <li>Экспорт CSV безопасен для Excel: значения экранируются, файл открывается в UTF-8.</li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+
+
+
+
+    </main>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
+
+  <dialog class="modal" id="modal" aria-labelledby="modalTitle">
+    <div class="modal-head"><h2 id="modalTitle">Диалог</h2></div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot" id="modalFoot"></div>
+  </dialog>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

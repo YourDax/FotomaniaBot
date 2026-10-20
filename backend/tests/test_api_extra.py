@@ -1,5 +1,7 @@
 """Regression tests for the API surface not covered by test_app.py."""
 
+import re
+from pathlib import Path
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -156,3 +158,46 @@ def test_school_class_creation_is_idempotent_per_school():
 
 def test_class_creation_rejects_blank_names():
     assert client.post("/api/classes", json={"school_name": "", "class_name": "5А"}).status_code == 422
+
+
+# --- Интерфейс оператора -----------------------------------------------------
+
+ASSETS = Path(__file__).resolve().parents[1] / "app" / "static"
+
+
+def test_web_ui_page_and_assets_are_served():
+    page = client.get("/")
+    assert page.status_code == 200
+    assert "text/html" in page.headers["content-type"]
+    assert "/static/styles.css" in page.text
+    assert "/static/app.js" in page.text
+
+    css = client.get("/static/styles.css")
+    assert css.status_code == 200
+    assert css.headers["content-type"].startswith("text/css")
+
+    script = client.get("/static/app.js")
+    assert script.status_code == 200
+    assert script.headers["content-type"].startswith("text/javascript")
+
+
+def test_web_ui_unknown_asset_is_404():
+    assert client.get("/static/unknown.js").status_code == 404
+
+
+def test_web_ui_has_no_inline_event_handlers():
+    page = client.get("/").text
+    assert "onclick=" not in page
+    assert "onchange=" not in page
+
+
+def test_web_ui_calls_only_known_api_routes():
+    source = (ASSETS / "app.js").read_text(encoding="utf-8")
+    calls = re.findall(r"fetch\('/api|api\(\s*[`']([^`']+)[`']", source)
+    paths = [call for call in calls if call]
+    assert paths, "в app.js не найдено обращений к API"
+    known = {route.path for route in app.routes}
+    for call in paths:
+        prefix = "/api" + call.split("${")[0]
+        assert any(path.startswith(prefix) for path in known), f"неизвестный маршрут: {call}"
+

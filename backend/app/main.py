@@ -222,6 +222,26 @@ def web_app() -> FileResponse:
     return FileResponse(WEB_ROOT / "index.html")
 
 
+UI_ASSETS: dict[str, str] = {
+    "styles.css": "text/css; charset=utf-8",
+    "app.js": "text/javascript; charset=utf-8",
+}
+
+
+@app.get("/static/{asset_name}", include_in_schema=False)
+def ui_asset(asset_name: str) -> FileResponse:
+    """Отдаёт файлы интерфейса с явным MIME-типом.
+
+    StaticFiles/mimetypes зависят от реестра Windows, где .js может оказаться
+    text/plain, а строгая проверка MIME в Chrome тогда отклонит стили и скрипты.
+    """
+    media_type = UI_ASSETS.get(asset_name)
+    path = WEB_ROOT / asset_name
+    if media_type is None or not path.is_file():
+        raise HTTPException(404, "Файл интерфейса не найден")
+    return FileResponse(path, media_type=media_type)
+
+
 @app.get("/api/health")
 def health() -> dict[str, Any]:
     return {
