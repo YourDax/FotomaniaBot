@@ -26,7 +26,7 @@ function Resolve-Python {
     $candidates = @()
     $launcher = Get-Command 'py.exe' -ErrorAction SilentlyContinue
     if ($launcher) {
-        foreach ($version in @('3.13', '3.12', '3.14', '3.11', '3.10')) {
+        foreach ($version in @('3.13', '3.12', '3.11', '3.10', '3.14', '3.15')) {
             $candidates += [pscustomobject]@{ FilePath = $launcher.Source; Prefix = @('-' + $version) }
         }
     }
@@ -34,6 +34,12 @@ function Resolve-Python {
     $pythonCommand = Get-Command 'python.exe' -ErrorAction SilentlyContinue
     if ($pythonCommand) {
         $candidates += [pscustomobject]@{ FilePath = $pythonCommand.Source; Prefix = @() }
+    }
+    if (-not $pythonCommand) {
+        $pythonCommand = Get-Command 'python' -ErrorAction SilentlyContinue
+        if ($pythonCommand) {
+            $candidates += [pscustomobject]@{ FilePath = $pythonCommand.Source; Prefix = @() }
+        }
     }
 
     foreach ($candidate in $candidates) {
