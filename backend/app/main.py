@@ -907,7 +907,12 @@ def import_school_contacts(
     if not data.school_name:
         raise HTTPException(400, "Не указано название школы")
     created = updated = skipped = 0
-    headers_by_field = {field: header for header, field in data.mapping.items()}
+    headers_by_field: dict[str, str] = {}
+    for header, field in data.mapping.items():
+        if not field:
+            continue
+        # При нескольких столбцах с одним полем берём первый по порядку в файле.
+        headers_by_field.setdefault(field, header)
     class_header = headers_by_field.get("class_name")
     last_class_name = ""
     with session_scope() as session:

@@ -1120,8 +1120,10 @@
   }
 
   function detectField(header) {
-    const value = normalizeHeader(header);
-    const has = (...terms) => terms.some((term) => value.includes(term));
+    // Сравниваем целые слова: иначе «Первоклассник» или «класса» в описании
+    // столбца ошибочно считаются колонкой «Класс».
+    const words = ` ${normalizeHeader(header)} `;
+    const has = (...terms) => terms.some((term) => words.includes(` ${term} `));
     if (has('класс', 'class')) return 'class_name';
     if (has('кр фио', 'фио кр', 'ф и о кр', 'красный руководитель', 'кл рук', 'классный руководитель')) return 'kr_name';
     if (has('кр телефон', 'телефон кр', 'тел кр', 'номер кр', 'кр тел')) return 'kr_phone';
@@ -1130,6 +1132,22 @@
     if (has('фио', 'ф и о', 'name')) return 'kr_name';
     if (has('телефон', 'phone', 'тел')) return 'kr_phone';
     return '';
+  }
+
+  // Каждое поле назначается только первому подходящему столбцу файла.
+  function detectMapping(headers) {
+    const mapping = {};
+    const taken = new Set();
+    headers.forEach((header) => {
+      const field = detectField(header);
+      if (field && !taken.has(field)) {
+        taken.add(field);
+        mapping[header] = field;
+      } else {
+        mapping[header] = '';
+      }
+    });
+    return mapping;
   }
 
   function setImportStep(step) {
@@ -1160,11 +1178,8 @@
     const data = await api('/imports/preview', { method: 'POST', body: form });
     S.importUi.headers = data.headers || [];
     S.importUi.rows = data.rows || [];
-    S.importUi.mapping = {};
+    S.importUi.mapping = detectMapping(S.importUi.headers);
     S.importUi.showAll = false;
-    S.importUi.headers.forEach((header) => {
-      S.importUi.mapping[header] = detectField(header);
-    });
     renderImport();
     setImportStep(2);
     $('importStep').classList.remove('hidden');

@@ -485,6 +485,38 @@ def test_import_detects_header_row_not_at_top():
     assert payload["rows"][0]["Класс"] == "5Б"
 
 
+def test_school_contacts_import_uses_first_class_column_when_others_are_empty():
+    suffix = uuid4().hex[:8]
+    school_name = f"Школа дубля класса {suffix}"
+    response = client.post(
+        "/api/imports/school-contacts",
+        json={
+            "rows": [
+                {
+                    "Класс": "5А",
+                    "Доп.Информация класса": "",
+                    "Снято на Первоклассник Виньетка (1 кл)": "",
+                    "ФИО КР": f"КР дубля {suffix}",
+                    "Телефон КР": "79990000005",
+                }
+            ],
+            "mapping": {
+                "Класс": "class_name",
+                "Доп.Информация класса": "class_name",
+                "Снято на Первоклассник Виньетка (1 кл)": "class_name",
+                "ФИО КР": "kr_name",
+                "Телефон КР": "kr_phone",
+            },
+            "school_name": school_name,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"created": 1, "updated": 0, "skipped": 0}
+    school = next(item for item in client.get("/api/schools").json() if item["name"] == school_name)
+    assert {item["name"] for item in school["classes"]} == {"5А"}
+
+
 def test_manual_task_open_and_confirmation_are_persisted():
     suffix = uuid4().hex
     school = client.post("/api/classes", json={"school_name": f"Школа ручного режима {suffix}", "class_name": f"6А-{suffix[:4]}"}).json()
