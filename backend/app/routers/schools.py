@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ..db import session_scope
 from ..models import (
+    Campaign,
     Client,
     DeliveryTask,
     School,
@@ -125,6 +126,11 @@ def delete_school(school_id: int) -> dict[str, str]:
             session.query(SchoolClass).filter(SchoolClass.id.in_(class_ids)).delete(
                 synchronize_session=False
             )
+        # В базах, созданных старыми миграциями, внешние ключи без каскадов: рассылки школы
+        # остаются, но привязку к ней снимаем вручную, иначе удаление упадёт на FOREIGN KEY.
+        session.query(Campaign).filter(Campaign.school_id == school_id).update(
+            {Campaign.school_id: None}, synchronize_session=False
+        )
         session.delete(school)
         session.commit()
     return {"status": "deleted"}
