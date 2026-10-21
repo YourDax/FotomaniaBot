@@ -53,19 +53,29 @@ function Resolve-Python {
     }
 
     foreach ($candidate in $candidates) {
-        $versionArguments = @($candidate.Prefix) + @('-c', 'import sys; print(sys.version_info[0]); print(sys.version_info[1]); print(sys.executable)')
+        $versionArguments = @($candidate.Prefix) + @('-c', 'import sys; print("PYINFO", sys.version_info[0], sys.version_info[1], sys.executable)')
         $previousErrorActionPreference = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
-        $runtimeInfo = @(& $candidate.FilePath @versionArguments 2>$null)
+        $runtimeOutput = @(& $candidate.FilePath @versionArguments 2>$null)
         $runtimeExitCode = $LASTEXITCODE
         $ErrorActionPreference = $previousErrorActionPreference
-        if ($runtimeExitCode -ne 0 -or $runtimeInfo.Count -lt 3) { continue }
+        if ($runtimeExitCode -ne 0) { continue }
 
-        $major = [int]$runtimeInfo[0]
-        $minor = [int]$runtimeInfo[1]
+        # py.exe может печатать служебный вывод (например, "Downloading: ...") в stdout,
+        # поэтому читаем только строку с маркером и не приводим произвольный текст к числу.
+        $infoMatch = $null
+        foreach ($outputLine in $runtimeOutput) {
+            $match = [regex]::Match([string]$outputLine, 'PYINFO (\d+) (\d+) (.+?)\s*$')
+            if ($match.Success) { $infoMatch = $match }
+        }
+        if (-not $infoMatch) { continue }
+
+        $major = [int]$infoMatch.Groups[1].Value
+        $minor = [int]$infoMatch.Groups[2].Value
         if ($major -ne 3 -or $minor -lt 10 -or $minor -gt 13) { continue }
 
-        $script:Python = [string]$runtimeInfo[2]
+        $script:Python = $infoMatch.Groups[3].Value
+        if (-not (Test-Path -LiteralPath $script:Python)) { continue }
         $script:PythonPrefix = @()
         $script:PythonVersion = "$major.$minor"
         Write-Host "Используется установленный Python $($script:PythonVersion): $($script:Python)"
