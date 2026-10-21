@@ -55,6 +55,12 @@ def test_up_to_date_database_is_not_backed_up(tmp_path):
     assert not (tmp_path / "backups").exists()
 
 
+def test_renamed_legacy_revision_is_not_treated_as_newer(tmp_path):
+    path = tmp_path / "app.db"
+    _old_database(path, revisions=[*sorted(KNOWN_REVISIONS), "0005_multiple_campaign_messages"])
+    assert backup_before_upgrade(_engine(path)) is None
+
+
 def test_database_from_newer_version_is_refused_untouched(tmp_path):
     path = tmp_path / "app.db"
     _old_database(path, revisions=[*sorted(KNOWN_REVISIONS), "9999_from_the_future"])

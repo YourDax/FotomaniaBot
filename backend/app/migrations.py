@@ -67,7 +67,9 @@ MIGRATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 
-LEGACY_REVISIONS = frozenset({"0004_unique_school_class"})  # применяется отдельно после цикла
+# 0004 применяется отдельно после цикла; 0005_multiple_campaign_messages — прежнее имя
+# нынешней 0005_multiple_messages (базы разработки хранят обе записи).
+LEGACY_REVISIONS = frozenset({"0004_unique_school_class", "0005_multiple_campaign_messages"})
 KNOWN_REVISIONS = frozenset(revision for revision, _ in MIGRATIONS) | LEGACY_REVISIONS
 KEEP_BACKUPS = 5
 
