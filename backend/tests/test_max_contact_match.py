@@ -93,3 +93,41 @@ def test_missing_expected_name_means_not_matched() -> None:
 @pytest.mark.parametrize("broken", [None, ""])
 def test_empty_profile_label_is_unknown(broken: str | None) -> None:
     assert _open_chat_is_for_contact(_page(broken), EXPECTED) is False
+
+
+# --- Повторная подготовка в чате, открытом поиском по номеру ----------------------
+
+
+@pytest.fixture
+def searched(monkeypatch: pytest.MonkeyPatch):
+    from app.max_browser import chat
+
+    title = {"value": "РК старое имя 5в Амалия"}
+    monkeypatch.setattr(chat, "_read_open_chat_title", lambda page: title["value"])
+    chat._last_search.clear()
+    yield chat, title
+    chat._last_search.clear()
+
+
+def test_chat_found_by_phone_is_reused_even_if_name_is_stale(searched) -> None:
+    chat, _ = searched
+    chat._remember_searched_chat(object(), "9991234567")
+    assert chat._open_chat_is_last_searched(object(), "9991234567") is True
+
+
+def test_other_phone_or_other_title_requires_new_search(searched) -> None:
+    chat, title = searched
+    chat._remember_searched_chat(object(), "9991234567")
+    assert chat._open_chat_is_last_searched(object(), "9990000000") is False
+    title["value"] = "Другой человек"
+    assert chat._open_chat_is_last_searched(object(), "9991234567") is False
+
+
+def test_nothing_remembered_or_unreadable_title_requires_search(searched) -> None:
+    chat, title = searched
+    assert chat._open_chat_is_last_searched(object(), "9991234567") is False
+    chat._remember_searched_chat(object(), "9991234567")
+    title["value"] = None
+    assert chat._open_chat_is_last_searched(object(), "9991234567") is False
+    chat._remember_searched_chat(object(), "9991234567")  # шапка не читается: память очищается
+    assert chat._last_search == {}

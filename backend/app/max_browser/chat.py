@@ -108,6 +108,35 @@ def _open_chat_is_for_contact(page: Any, expected_name: str | None) -> bool:
     return matched
 
 
+# Контакт, который только что открыт поиском по номеру: цифры номера и имя в шапке чата.
+# Имя в MAX может не совпадать с шаблоном (контакт ещё не переименован), но человека уже
+# подтвердил поиск по номеру, поэтому следующие сообщения ему не требуют нового поиска.
+_last_search: dict[str, str] = {}
+
+
+def _remember_searched_chat(page: Any, phone_digits: str) -> None:
+    try:
+        title = _read_open_chat_title(page)
+    except Exception:
+        title = None
+    _last_search.clear()
+    if title and phone_digits:
+        _last_search.update(digits=phone_digits, title=normalize_contact_name(title))
+
+
+def _open_chat_is_last_searched(page: Any, phone_digits: str) -> bool:
+    """True, если открыт тот же чат (то же имя в шапке), что дал последний поиск по этому номеру."""
+    if not phone_digits or _last_search.get("digits") != phone_digits:
+        return False
+    try:
+        title = _read_open_chat_title(page)
+    except Exception:
+        return False
+    matched = title is not None and normalize_contact_name(title) == _last_search["title"]
+    log.info("MAX: чат последнего поиска по этому номеру открыт: %s", matched)
+    return matched
+
+
 def _prepare_draft_in_open_chat(
     page: Any, client_name: str, message: str | None
 ) -> PreparationResult | None:
@@ -146,14 +175,16 @@ def _prepare_on_page(
         "[class*='composer'] [contenteditable='true']",
         "[class*='input'] [contenteditable='true']",
     ]
-    if _open_chat_is_for_contact(page, expected_name):
+    phone_digits = _max_phone_digits(identity)
+    if _open_chat_is_for_contact(page, expected_name) or _open_chat_is_last_searched(
+        page, phone_digits
+    ):
         prepared = _prepare_draft_in_open_chat(page, client_name, message)
         if prepared is not None:
             log.info("MAX: черновик подготовлен в уже открытом чате, поиск по номеру не нужен")
             return prepared
     _return_to_main_screen(page)
     search = _open_phone_search(page)
-    phone_digits = _max_phone_digits(identity)
     if not phone_digits:
         raise MaxBrowserError("Номер телефона клиента не содержит цифр.")
     log.info(
@@ -184,6 +215,7 @@ def _prepare_on_page(
             "После поиска по номеру не удалось открыть чат или найти поле ввода сообщения MAX."
         )
     log.info("MAX: чат открыт, поле сообщения найдено")
+    _remember_searched_chat(page, phone_digits)
     if message is None:
         log.info("MAX: чат открыт без вставки текста")
         return PreparationResult(
