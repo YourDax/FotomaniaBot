@@ -8,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -25,7 +26,6 @@ __all__ = [
     "MessageTemplate",
     "School",
     "SchoolClass",
-    "Setting",
     "engine",
     "now",
 ]
@@ -33,12 +33,6 @@ __all__ = [
 
 def now() -> datetime:
     return datetime.now(timezone.utc)
-
-
-class Setting(Base):
-    __tablename__ = "settings"
-    key: Mapped[str] = mapped_column(String(80), primary_key=True)
-    value: Mapped[str] = mapped_column(Text, default="")
 
 
 class School(Base):
@@ -50,13 +44,9 @@ class School(Base):
 
 class SchoolClass(Base):
     __tablename__ = "school_classes"
-    __table_args__ = (
-        UniqueConstraint("school_id", "name", name="uq_school_class_name"),
-    )
+    __table_args__ = (UniqueConstraint("school_id", "name", name="uq_school_class_name"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    school_id: Mapped[int] = mapped_column(
-        ForeignKey("schools.id", ondelete="CASCADE"), index=True
-    )
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(100), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
@@ -81,9 +71,7 @@ class Client(Base):
     )
     role: Mapped[str] = mapped_column(String(10), default="KR", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=now, onupdate=now
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
 
 
 class Campaign(Base):
@@ -113,13 +101,15 @@ class Campaign(Base):
 
 class DeliveryTask(Base):
     __tablename__ = "delivery_tasks"
+    __table_args__ = (
+        # Запросы воркера и счётчики статусов: WHERE campaign_id = ? AND status = ?
+        Index("ix_delivery_tasks_campaign_status", "campaign_id", "status"),
+    )
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     campaign_id: Mapped[int] = mapped_column(
         ForeignKey("campaigns.id", ondelete="CASCADE"), index=True
     )
-    client_id: Mapped[int] = mapped_column(
-        ForeignKey("clients.id", ondelete="CASCADE"), index=True
-    )
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"), index=True)
     recipient_role: Mapped[str] = mapped_column(String(10), default="KR")
     rendered_message: Mapped[str] = mapped_column(Text)
     # JSON: [{"text", "prepared_at"}] по числу сообщений; rendered_message — первое.
@@ -127,7 +117,6 @@ class DeliveryTask(Base):
     status: Mapped[str] = mapped_column(String(30), default="PENDING", index=True)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    message_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     requires_review: Mapped[bool] = mapped_column(Boolean, default=False)
     opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     operator_confirmed_at: Mapped[datetime | None] = mapped_column(
@@ -139,6 +128,10 @@ class DeliveryTask(Base):
     )
     browser_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    # Нужен для выдачи только изменившихся заданий (см. /tasks/changes).
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=now, onupdate=now, nullable=True
+    )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     campaign: Mapped[Campaign] = relationship(back_populates="tasks")
@@ -148,14 +141,9 @@ class MessageTemplate(Base):
     """Использованный текст рассылки для одной роли (КР или РК), хранится без персональных данных."""
 
     __tablename__ = "message_templates"
-    __table_args__ = (
-        UniqueConstraint("role", "body", name="uq_message_template_role_body"),
-    )
+    __table_args__ = (UniqueConstraint("role", "body", name="uq_message_template_role_body"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     role: Mapped[str] = mapped_column(String(10), index=True)
     body: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=now, onupdate=now
-    )
-
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)

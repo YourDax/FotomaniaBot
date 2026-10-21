@@ -43,7 +43,12 @@ def test_school_and_class_crud():
         json={"school_name": f"CRUD школа {uuid4()}", "class_name": "5А"},
     ).json()
     school_id, class_id = school["school_id"], school["class_id"]
-    assert client.patch(f"/api/schools/{school_id}", json={"name": "Переименованная школа"}).status_code == 200
+    assert (
+        client.patch(
+            f"/api/schools/{school_id}", json={"name": "Переименованная школа"}
+        ).status_code
+        == 200
+    )
     assert client.patch(f"/api/classes/{class_id}", json={"name": "5Б"}).status_code == 200
     assert client.delete(f"/api/classes/{class_id}").status_code == 200
     assert client.delete(f"/api/schools/{school_id}").status_code == 200
@@ -86,10 +91,15 @@ def test_deleting_school_and_class_cascades_only_their_contacts():
 
 def test_client_and_campaign_flow():
     name = "Тестовый клиент"
-    response = client.post("/api/clients", json={"name": name, "chat_link": f"https://max.ru/{uuid4()}"})
+    response = client.post(
+        "/api/clients", json={"name": name, "chat_link": f"https://max.ru/{uuid4()}"}
+    )
     assert response.status_code == 200
     client_id = response.json()["id"]
-    response = client.post("/api/campaigns", json={"name": "Тест", "message": "Здравствуйте, {name}!", "client_ids": [client_id]})
+    response = client.post(
+        "/api/campaigns",
+        json={"name": "Тест", "message": "Здравствуйте, {name}!", "client_ids": [client_id]},
+    )
     assert response.status_code == 200
     campaign_id = response.json()["id"]
     assert client.get("/api/campaigns").json()[0]["mode"] == "manual"
@@ -140,7 +150,11 @@ def test_campaigns_can_be_deleted_in_bulk():
         contact = client.post("/api/clients", json={"name": f"Bulk {uuid4()}"}).json()
         campaign = client.post(
             "/api/campaigns",
-            json={"name": f"Bulk campaign {index}", "message": "Текст", "client_ids": [contact["id"]]},
+            json={
+                "name": f"Bulk campaign {index}",
+                "message": "Текст",
+                "client_ids": [contact["id"]],
+            },
         ).json()
         campaign_ids.append(campaign["id"])
     response = client.post("/api/campaigns/delete", json={"campaign_ids": campaign_ids})
@@ -266,8 +280,7 @@ def test_school_contacts_import_resolves_numeric_school_id():
     assert len(contacts) == 2
 
 
-
-def test_csv_import_and_settings():
+def test_csv_preview():
     suffix = uuid4().hex
     csv_data = f"Имя,Телефон,Ссылка\nИмпортированный клиент,{suffix},https://max.ru/{suffix}\n"
     response = client.post(
@@ -277,17 +290,6 @@ def test_csv_import_and_settings():
     assert response.status_code == 200
     preview = response.json()
     assert preview["total_rows"] == 1
-    response = client.post(
-        "/api/imports/confirm",
-        json={
-            "rows": preview["rows"],
-            "mapping": {"Имя": "name", "Телефон": "phone", "Ссылка": "chat_link"},
-            "duplicate_mode": "skip",
-        },
-    )
-    assert response.status_code == 200
-    assert response.json()["created"] == 1
-    assert client.patch("/api/settings", json={"mode": "manual"}).status_code == 200
 
 
 def test_school_contacts_import_inherits_merged_class_and_uses_mapped_header():
@@ -343,7 +345,9 @@ def test_school_contacts_import_update_reassigns_existing_no_class_contacts():
     response = client.post(
         "/api/imports/school-contacts",
         json={
-            "rows": [{"Класс": "2В", "ФИО КР": f"КР без класса {suffix}", "Телефон КР": "79990000001"}],
+            "rows": [
+                {"Класс": "2В", "ФИО КР": f"КР без класса {suffix}", "Телефон КР": "79990000001"}
+            ],
             "mapping": {"Класс": "class_name", "ФИО КР": "kr_name", "Телефон КР": "kr_phone"},
             "school_name": school_name,
             "duplicate_mode": "update",
@@ -358,13 +362,13 @@ def test_school_contacts_import_update_reassigns_existing_no_class_contacts():
     assert saved_contact["school_id"] == placeholder["school_id"]
     assert saved_contact["class_id"] != placeholder["class_id"]
     classes = next(
-        item["classes"] for item in client.get("/api/schools").json()
+        item["classes"]
+        for item in client.get("/api/schools").json()
         if item["id"] == placeholder["school_id"]
     )
     assigned_class = next(item for item in classes if item["id"] == saved_contact["class_id"])
     assert assigned_class["name"] == "2В"
     assert assigned_class["contacts"][0]["id"] == old_contact["id"]
-
 
 
 def test_school_contacts_import_normalizes_mapped_headers_with_newlines():
@@ -396,18 +400,34 @@ def test_school_contacts_import_normalizes_mapped_headers_with_newlines():
 
 
 def test_school_contacts_import_creates_separate_roles():
-    rows = [{"Класс": "5А", "ФИО КР": "Иванов Иван", "Телефон КР": "79990000001", "ФИО РК": "Петрова Анна", "Телефон РК": "79990000002"}]
+    rows = [
+        {
+            "Класс": "5А",
+            "ФИО КР": "Иванов Иван",
+            "Телефон КР": "79990000001",
+            "ФИО РК": "Петрова Анна",
+            "Телефон РК": "79990000002",
+        }
+    ]
     response = client.post(
         "/api/imports/school-contacts",
         json={
             "rows": rows,
-            "mapping": {"Класс": "class_name", "ФИО КР": "kr_name", "Телефон КР": "kr_phone", "ФИО РК": "rk_name", "Телефон РК": "rk_phone"},
+            "mapping": {
+                "Класс": "class_name",
+                "ФИО КР": "kr_name",
+                "Телефон КР": "kr_phone",
+                "ФИО РК": "rk_name",
+                "Телефон РК": "rk_phone",
+            },
             "school_name": "Школа №1",
         },
     )
     assert response.status_code == 200
     contacts = client.get("/api/clients").json()
-    school_contacts = [item for item in contacts if item["class_id"] and item["role"] in {"KR", "RK"}]
+    school_contacts = [
+        item for item in contacts if item["class_id"] and item["role"] in {"KR", "RK"}
+    ]
     assert {item["role"] for item in school_contacts} == {"KR", "RK"}
 
 
@@ -431,7 +451,13 @@ def test_excel_preview_imports_contacts_into_distinct_classes():
 
     preview_response = client.post(
         "/api/imports/preview",
-        files={"file": ("school.xlsx", stream.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "file": (
+                "school.xlsx",
+                stream.getvalue(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
     )
 
     assert preview_response.status_code == 200
@@ -505,21 +531,37 @@ def test_school_contacts_import_uses_first_class_column_when_others_are_empty():
 
 def test_manual_task_open_and_confirmation_are_persisted():
     suffix = uuid4().hex
-    school = client.post("/api/classes", json={"school_name": f"Школа ручного режима {suffix}", "class_name": f"6А-{suffix[:4]}"}).json()
+    school = client.post(
+        "/api/classes",
+        json={"school_name": f"Школа ручного режима {suffix}", "class_name": f"6А-{suffix[:4]}"},
+    ).json()
     contact = client.post(
         "/api/clients",
-        json={"name": "КР для проверки", "phone": suffix, "chat_link": f"https://max.ru/manual-check-{suffix}", "school_id": school["school_id"], "class_id": school["class_id"], "role": "KR"},
+        json={
+            "name": "КР для проверки",
+            "phone": suffix,
+            "chat_link": f"https://max.ru/manual-check-{suffix}",
+            "school_id": school["school_id"],
+            "class_id": school["class_id"],
+            "role": "KR",
+        },
     ).json()
     campaign = client.post(
         "/api/campaigns",
-        json={"name": "Ручная проверка", "school_id": school["school_id"], "message_kr": "Текст для {name}", "client_ids": [contact["id"]], "mode": "manual"},
+        json={
+            "name": "Ручная проверка",
+            "school_id": school["school_id"],
+            "message_kr": "Текст для {name}",
+            "client_ids": [contact["id"]],
+            "mode": "manual",
+        },
     ).json()
     task = client.get(f"/api/campaigns/{campaign['id']}/tasks").json()[0]
-    assert client.post(f"/api/tasks/{task['id']}/opened").status_code == 200
-    assert client.post(f"/api/tasks/{task['id']}/confirm", json={"result": "sent"}).status_code == 200
+    assert (
+        client.post(f"/api/tasks/{task['id']}/confirm", json={"result": "sent"}).status_code == 200
+    )
     saved = client.get(f"/api/campaigns/{campaign['id']}/tasks").json()[0]
     assert saved["operator_result"] == "sent"
-    assert saved["opened_at"] is not None
 
 
 def test_task_status_can_be_updated_manually():
@@ -530,7 +572,11 @@ def test_task_status_can_be_updated_manually():
     ).json()
     campaign = client.post(
         "/api/campaigns",
-        json={"name": f"Статус рассылки {suffix}", "message": "Текст", "client_ids": [contact["id"]]},
+        json={
+            "name": f"Статус рассылки {suffix}",
+            "message": "Текст",
+            "client_ids": [contact["id"]],
+        },
     ).json()
     task = client.get(f"/api/campaigns/{campaign['id']}/tasks").json()[0]
     response = client.patch(f"/api/tasks/{task['id']}/status", json={"status": "CONTACT_NOT_FOUND"})
@@ -547,15 +593,32 @@ def test_not_found_mark_clears_only_on_manual_sent():
     ).json()
     campaign = client.post(
         "/api/campaigns",
-        json={"name": f"Пометка рассылки {suffix}", "message": "Текст", "client_ids": [contact["id"]]},
+        json={
+            "name": f"Пометка рассылки {suffix}",
+            "message": "Текст",
+            "client_ids": [contact["id"]],
+        },
     ).json()
     task = client.get(f"/api/campaigns/{campaign['id']}/tasks").json()[0]
-    assert client.patch(f"/api/tasks/{task['id']}/status", json={"status": "CONTACT_NOT_FOUND"}).status_code == 200
-    assert client.patch(f"/api/tasks/{task['id']}/status", json={"status": "PENDING"}).status_code == 409
-    assert client.post(f"/api/tasks/{task['id']}/confirm", json={"result": "failed"}).status_code == 409
+    assert (
+        client.patch(
+            f"/api/tasks/{task['id']}/status", json={"status": "CONTACT_NOT_FOUND"}
+        ).status_code
+        == 200
+    )
+    assert (
+        client.patch(f"/api/tasks/{task['id']}/status", json={"status": "PENDING"}).status_code
+        == 409
+    )
+    assert (
+        client.post(f"/api/tasks/{task['id']}/confirm", json={"result": "failed"}).status_code
+        == 409
+    )
     saved = client.get(f"/api/campaigns/{campaign['id']}/tasks").json()[0]
     assert saved["status"] == "CONTACT_NOT_FOUND"
-    assert client.post(f"/api/tasks/{task['id']}/confirm", json={"result": "sent"}).status_code == 200
+    assert (
+        client.post(f"/api/tasks/{task['id']}/confirm", json={"result": "sent"}).status_code == 200
+    )
     saved = client.get(f"/api/campaigns/{campaign['id']}/tasks").json()[0]
     assert saved["status"] == "SENT"
 
@@ -571,11 +634,21 @@ def test_campaign_can_use_selected_contacts_from_multiple_schools():
     ).json()
     first_contact = client.post(
         "/api/clients",
-        json={"name": "Первый получатель", "phone": "79990000101", "school_id": first["school_id"], "class_id": first["class_id"]},
+        json={
+            "name": "Первый получатель",
+            "phone": "79990000101",
+            "school_id": first["school_id"],
+            "class_id": first["class_id"],
+        },
     ).json()
     second_contact = client.post(
         "/api/clients",
-        json={"name": "Второй получатель", "phone": "79990000102", "school_id": second["school_id"], "class_id": second["class_id"]},
+        json={
+            "name": "Второй получатель",
+            "phone": "79990000102",
+            "school_id": second["school_id"],
+            "class_id": second["class_id"],
+        },
     ).json()
     campaign = client.post(
         "/api/campaigns",
@@ -643,7 +716,11 @@ def test_open_max_task_opens_chat_without_inserting_text(monkeypatch):
     ).json()
     campaign = client.post(
         "/api/campaigns",
-        json={"name": f"Открытие чата {suffix}", "message": "Не вставлять", "client_ids": [contact["id"]]},
+        json={
+            "name": f"Открытие чата {suffix}",
+            "message": "Не вставлять",
+            "client_ids": [contact["id"]],
+        },
     ).json()
     task = client.get(f"/api/campaigns/{campaign['id']}/tasks").json()[0]
     monkeypatch.setattr(
@@ -669,7 +746,11 @@ def test_open_max_task_not_found_is_a_status(monkeypatch):
     ).json()
     campaign = client.post(
         "/api/campaigns",
-        json={"name": f"Открытие не найден {suffix}", "message": "Не вставлять", "client_ids": [contact["id"]]},
+        json={
+            "name": f"Открытие не найден {suffix}",
+            "message": "Не вставлять",
+            "client_ids": [contact["id"]],
+        },
     ).json()
     task = client.get(f"/api/campaigns/{campaign['id']}/tasks").json()[0]
 

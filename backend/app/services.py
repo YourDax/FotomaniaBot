@@ -88,9 +88,7 @@ CONTACT_NAME_MAX_LENGTH = 64
 PATRONYMIC_SUFFIXES: tuple[str, ...] = ("вна", "вич", "ична", "ич")
 
 
-def contact_first_name(
-    role: str, school: str, class_name: str, full_name: str, year: int
-) -> str:
+def contact_first_name(role: str, school: str, class_name: str, full_name: str, year: int) -> str:
     """Build the MAX contact first name ``РК|КР Школа Класс - Год Имя Отчество``.
 
     The surname (first word of ФИО) is dropped here; the surname field itself
@@ -121,4 +119,3 @@ def contact_first_name(
             "сократите название школы или ФИО"
         )
     return result
-

@@ -11,8 +11,6 @@ from .message_sets import MAX_MESSAGE_LENGTH, MAX_MESSAGES_PER_ROLE
 MessageText = Annotated[str, StringConstraints(max_length=MAX_MESSAGE_LENGTH)]
 MessageList = Annotated[list[MessageText], Field(max_length=MAX_MESSAGES_PER_ROLE)]
 
-TaskStatus = str
-
 TASK_STATUS_PATTERN = (
     "^(PENDING|PROCESSING|REQUIRES_REVIEW|CONTACT_NOT_FOUND|MAX_ERROR|"
     "SENT|FAILED|UNKNOWN|CANCELLED)$"
@@ -57,12 +55,6 @@ class TaskMessageIn(BaseModel):
     index: int = Field(default=1, ge=1, le=MAX_MESSAGES_PER_ROLE)
 
 
-class ImportConfirm(BaseModel):
-    rows: list[dict[str, Any]]
-    mapping: dict[str, str] = Field(default_factory=dict)
-    duplicate_mode: str = Field(default="skip", pattern="^(skip|update|new_only)$")
-
-
 class ClassIn(BaseModel):
     school_name: str = Field(min_length=1, max_length=200)
     class_name: str = Field(min_length=1, max_length=100)
@@ -90,10 +82,6 @@ class ManualResultIn(BaseModel):
 
 class TaskStatusIn(BaseModel):
     status: str = Field(pattern=TASK_STATUS_PATTERN)
-
-
-class SettingsIn(BaseModel):
-    mode: str = Field(default="manual", pattern="^manual$")
 
 
 class CampaignDeleteIn(BaseModel):

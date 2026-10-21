@@ -171,7 +171,10 @@ def test_edit_single_message_resets_only_its_draft(monkeypatch):
         ),
     )
     for number in (1, 2):
-        assert client.post(f"/api/tasks/{kr_task['id']}/prepare-max?message_no={number}").status_code == 200
+        assert (
+            client.post(f"/api/tasks/{kr_task['id']}/prepare-max?message_no={number}").status_code
+            == 200
+        )
 
     edited = client.patch(
         f"/api/tasks/{kr_task['id']}/message", json={"message": "Второе (новое)", "index": 2}
@@ -191,13 +194,19 @@ def test_edit_single_message_resets_only_its_draft(monkeypatch):
         f"/api/tasks/{kr_task['id']}/message", json={"message": "x", "index": 3}
     )
     assert out_of_range.status_code == 422
-    assert client.patch(
-        f"/api/tasks/{kr_task['id']}/message", json={"message": "x", "index": 0}
-    ).status_code == 422
+    assert (
+        client.patch(
+            f"/api/tasks/{kr_task['id']}/message", json={"message": "x", "index": 0}
+        ).status_code
+        == 422
+    )
     # без index правится первое сообщение (прежнее поведение API)
-    assert client.patch(
-        f"/api/tasks/{kr_task['id']}/message", json={"message": "Первое (новое)"}
-    ).status_code == 200
+    assert (
+        client.patch(
+            f"/api/tasks/{kr_task['id']}/message", json={"message": "Первое (новое)"}
+        ).status_code
+        == 200
+    )
 
 
 def test_changing_campaign_messages_changes_count_and_keeps_unchanged_drafts(monkeypatch):
@@ -226,18 +235,25 @@ def test_changing_campaign_messages_changes_count_and_keeps_unchanged_drafts(mon
     assert by_role["KR"]["messages"][0]["prepared_at"] is not None  # текст не менялся
     assert [m["text"] for m in by_role["RK"]["messages"]] == ["Р1"]
 
-    empty = client.patch(f"/api/campaigns/{campaign['id']}/messages", json={"messages_kr": [], "messages_rk": []})
+    empty = client.patch(
+        f"/api/campaigns/{campaign['id']}/messages", json={"messages_kr": [], "messages_rk": []}
+    )
     assert empty.status_code == 422
-    blank = client.patch(f"/api/campaigns/{campaign['id']}/messages", json={"messages_kr": ["а", ""]})
+    blank = client.patch(
+        f"/api/campaigns/{campaign['id']}/messages", json={"messages_kr": ["а", ""]}
+    )
     assert blank.status_code == 422
 
 
 def test_sent_tasks_keep_their_messages_when_campaign_texts_change():
-    campaign, kr_task, _ = _campaign(uuid4().hex, messages_kr=["Первое", "Второе"], messages_rk=["Р"])
+    campaign, kr_task, _ = _campaign(
+        uuid4().hex, messages_kr=["Первое", "Второе"], messages_rk=["Р"]
+    )
     confirmed = client.post(f"/api/tasks/{kr_task['id']}/confirm", json={"result": "sent"})
     assert confirmed.status_code == 200
     result = client.patch(
-        f"/api/campaigns/{campaign['id']}/messages", json={"messages_kr": ["Новое"], "messages_rk": ["Р"]}
+        f"/api/campaigns/{campaign['id']}/messages",
+        json={"messages_kr": ["Новое"], "messages_rk": ["Р"]},
     )
     assert result.json()["skipped"] >= 1
     saved = next(
@@ -249,7 +265,9 @@ def test_sent_tasks_keep_their_messages_when_campaign_texts_change():
 
 
 def test_report_counts_prepared_messages(monkeypatch):
-    campaign, kr_task, _ = _campaign(uuid4().hex, messages_kr=["Первое", "Второе"], messages_rk=["Р"])
+    campaign, kr_task, _ = _campaign(
+        uuid4().hex, messages_kr=["Первое", "Второе"], messages_rk=["Р"]
+    )
     monkeypatch.setattr(
         tasks_router,
         "prepare_message",
@@ -275,22 +293,36 @@ def test_migration_adds_multiple_message_columns_to_old_database(tmp_path):
             "CREATE TABLE campaigns (id INTEGER PRIMARY KEY, name VARCHAR(200), mode VARCHAR(20), "
             "message TEXT, message_kr TEXT, message_rk TEXT, school_id INTEGER)",
             "CREATE TABLE delivery_tasks (id INTEGER PRIMARY KEY, campaign_id INTEGER, "
-            "client_id INTEGER, rendered_message TEXT, recipient_role VARCHAR(10), opened_at DATETIME, "
+            "client_id INTEGER, rendered_message TEXT, status VARCHAR(30), recipient_role VARCHAR(10), opened_at DATETIME, "
             "operator_confirmed_at DATETIME, operator_result VARCHAR(30), "
-            "browser_prepared_at DATETIME, browser_error TEXT)",
+            "browser_prepared_at DATETIME, browser_error TEXT, created_at DATETIME, started_at DATETIME, "
+            "finished_at DATETIME)",
             "INSERT INTO campaigns (id, name, mode, message, message_kr) "
             "VALUES (1, 'Старая', 'manual', 'Привет', 'Привет')",
-            "INSERT INTO delivery_tasks (id, campaign_id, client_id, rendered_message, recipient_role) "
-            "VALUES (1, 1, 1, 'Привет, Иван', 'KR')",
+            "INSERT INTO delivery_tasks (id, campaign_id, client_id, rendered_message, recipient_role, created_at) "
+            "VALUES (1, 1, 1, 'Привет, Иван', 'KR', '2026-01-02 03:04:05')",
         ):
             connection.execute(text(statement))
     apply_migrations(engine)
     apply_migrations(engine)  # повторный запуск безопасен
     with engine.begin() as connection:
-        campaign_columns = {row[1] for row in connection.execute(text("PRAGMA table_info(campaigns)"))}
-        task_columns = {row[1] for row in connection.execute(text("PRAGMA table_info(delivery_tasks)"))}
+        campaign_columns = {
+            row[1] for row in connection.execute(text("PRAGMA table_info(campaigns)"))
+        }
+        task_columns = {
+            row[1] for row in connection.execute(text("PRAGMA table_info(delivery_tasks)"))
+        }
     assert {"messages_kr", "messages_rk"} <= campaign_columns
     assert "messages" in task_columns
+    assert "updated_at" in task_columns
+    with engine.begin() as connection:
+        backfilled = connection.execute(
+            text("SELECT updated_at FROM delivery_tasks WHERE id = 1")
+        ).scalar()
+    assert backfilled == "2026-01-02 03:04:05"
+    with engine.begin() as connection:
+        indexes = {row[1] for row in connection.execute(text("PRAGMA index_list(delivery_tasks)"))}
+    assert "ix_delivery_tasks_campaign_status" in indexes
 
 
 def test_legacy_task_without_messages_column_value_shows_single_message():

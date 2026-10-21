@@ -32,11 +32,16 @@ engine = create_engine(
 
 @event.listens_for(engine, "connect")
 def _enable_sqlite_foreign_keys(dbapi_connection: object, _record: object) -> None:
-    """SQLite по умолчанию игнорирует внешние ключи; включаем их явно."""
+    """Параметры SQLite: внешние ключи (по умолчанию выключены), WAL и ожидание блокировки."""
     if not _is_sqlite:
         return
     cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
     cursor.execute("PRAGMA foreign_keys=ON")
+    # WAL: читатели не блокируют запись (воркер и запросы работают из разных потоков);
+    # busy_timeout: вместо мгновенного «database is locked» ждём освобождения до 5 с.
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.execute("PRAGMA busy_timeout=5000")
     cursor.close()
 
 
@@ -54,8 +59,3 @@ def session_scope() -> Iterator[Session]:
         raise
     finally:
         session.close()
-
-
-def db() -> Session:
-    """Обратная совместимость: открытая сессия для `with db() as session`."""
-    return SessionLocal()

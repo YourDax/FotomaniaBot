@@ -61,9 +61,10 @@ def test_bulk_edit_updates_only_unprocessed_tasks_and_saves_template():
     tasks = client.get(f"/api/campaigns/{campaign['id']}/tasks").json()
     kr_task = next(task for task in tasks if task["recipient_role"] == "KR")
     rk_task = next(task for task in tasks if task["recipient_role"] == "RK")
-    assert client.patch(
-        f"/api/tasks/{rk_task['id']}/status", json={"status": "SENT"}
-    ).status_code == 200
+    assert (
+        client.patch(f"/api/tasks/{rk_task['id']}/status", json={"status": "SENT"}).status_code
+        == 200
+    )
 
     new_kr = f"Новый КР {uuid4().hex} {{name}}"
     response = client.patch(

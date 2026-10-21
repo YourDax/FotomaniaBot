@@ -66,9 +66,7 @@ def find_client_duplicate(session: Any, values: dict[str, Any]) -> Client | None
     from sqlalchemy import or_
 
     conditions = [
-        getattr(Client, key) == values[key]
-        for key in DUPLICATE_FIELDS
-        if values.get(key)
+        getattr(Client, key) == values[key] for key in DUPLICATE_FIELDS if values.get(key)
     ]
     if not conditions:
         return None
@@ -124,16 +122,16 @@ def delete_client(client_id: int) -> dict[str, str]:
 def delete_clients(data: ClientDeleteIn) -> dict[str, int]:
     client_ids = list(dict.fromkeys(data.client_ids))
     with session_scope() as session:
-        existing_ids = session.scalars(
-            select(Client.id).where(Client.id.in_(client_ids))
-        ).all()
+        existing_ids = session.scalars(select(Client.id).where(Client.id.in_(client_ids))).all()
         if not existing_ids:
             raise HTTPException(404, "Выбранные контакты не найдены")
-        session.query(DeliveryTask).filter(
-            DeliveryTask.client_id.in_(existing_ids)
-        ).delete(synchronize_session=False)
-        deleted = session.query(Client).filter(
-            Client.id.in_(existing_ids)
-        ).delete(synchronize_session=False)
+        session.query(DeliveryTask).filter(DeliveryTask.client_id.in_(existing_ids)).delete(
+            synchronize_session=False
+        )
+        deleted = (
+            session.query(Client)
+            .filter(Client.id.in_(existing_ids))
+            .delete(synchronize_session=False)
+        )
         session.commit()
     return {"deleted": deleted}

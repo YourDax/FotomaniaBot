@@ -64,7 +64,9 @@ class FakeLocator:
 
 
 class FakePage:
-    def __init__(self, screen: str, overlay_back_blocked: bool = False, stuck: bool = False) -> None:
+    def __init__(
+        self, screen: str, overlay_back_blocked: bool = False, stuck: bool = False
+    ) -> None:
         self.screen = screen
         self.overlay_back_blocked = overlay_back_blocked
         self.stuck = stuck

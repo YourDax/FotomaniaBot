@@ -29,7 +29,9 @@ def _load_list(raw: str | None) -> list[Any]:
 
 def own_messages(campaign: Any, role: str) -> list[str]:
     """Тексты, заданные в рассылке именно для этой роли (без подстановки чужих)."""
-    column, legacy = ("messages_rk", "message_rk") if role == "RK" else ("messages_kr", "message_kr")
+    column, legacy = (
+        ("messages_rk", "message_rk") if role == "RK" else ("messages_kr", "message_kr")
+    )
     items = [str(item) for item in _load_list(getattr(campaign, column, None)) if str(item).strip()]
     if items:
         return items
@@ -71,7 +73,12 @@ def task_messages(task: Any) -> list[dict[str, Any]]:
         return items
     if (task.rendered_message or "").strip():
         prepared = task.browser_prepared_at
-        return [{"text": task.rendered_message, "prepared_at": prepared.isoformat() if prepared else None}]
+        return [
+            {
+                "text": task.rendered_message,
+                "prepared_at": prepared.isoformat() if prepared else None,
+            }
+        ]
     return []
 
 
@@ -79,7 +86,9 @@ def save_task_messages(task: Any, items: list[dict[str, Any]]) -> None:
     """Записывает сообщения и обновляет зеркальные поля первого сообщения."""
     task.messages = json.dumps(items, ensure_ascii=False)
     task.rendered_message = items[0]["text"] if items else ""
-    stamps = [datetime.fromisoformat(item["prepared_at"]) for item in items if item.get("prepared_at")]
+    stamps = [
+        datetime.fromisoformat(item["prepared_at"]) for item in items if item.get("prepared_at")
+    ]
     task.browser_prepared_at = max(stamps) if stamps else None
 
 
@@ -89,7 +98,9 @@ def rebuild_task_messages(task: Any, texts: list[str]) -> bool:
     items = [
         {
             "text": text,
-            "prepared_at": old[i]["prepared_at"] if i < len(old) and old[i]["text"] == text else None,
+            "prepared_at": old[i]["prepared_at"]
+            if i < len(old) and old[i]["text"] == text
+            else None,
         }
         for i, text in enumerate(texts)
     ]

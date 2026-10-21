@@ -29,39 +29,32 @@ router = APIRouter()
 @router.get("/api/schools")
 def list_schools() -> list[dict[str, Any]]:
     with session_scope() as session:
+        # Три запроса на всё дерево «школа → класс → контакты» вместо запроса на каждый класс.
         schools = session.scalars(select(School).order_by(School.name)).all()
-        result = []
-        for school in schools:
-            classes = session.scalars(
-                select(SchoolClass)
-                .where(SchoolClass.school_id == school.id)
-                .order_by(SchoolClass.name)
-            ).all()
-            class_data = []
-            for item in classes:
-                contacts = session.scalars(
-                    select(Client)
-                    .where(Client.class_id == item.id)
-                    .order_by(Client.role, Client.name)
-                ).all()
-                class_data.append(
-                    {
-                        "id": item.id,
-                        "name": item.name,
-                        "contacts": [
-                            {
-                                "id": contact.id,
-                                "name": contact.name,
-                                "phone": contact.phone,
-                                "role": contact.role,
-                                "opted_out": contact.opted_out,
-                            }
-                            for contact in contacts
-                        ],
-                    }
-                )
-            result.append({"id": school.id, "name": school.name, "classes": class_data})
-        return result
+        classes = session.scalars(select(SchoolClass).order_by(SchoolClass.name)).all()
+        contacts = session.scalars(
+            select(Client).where(Client.class_id.is_not(None)).order_by(Client.role, Client.name)
+        ).all()
+        contacts_by_class: dict[int, list[dict[str, Any]]] = {}
+        for contact in contacts:
+            contacts_by_class.setdefault(contact.class_id, []).append(
+                {
+                    "id": contact.id,
+                    "name": contact.name,
+                    "phone": contact.phone,
+                    "role": contact.role,
+                    "opted_out": contact.opted_out,
+                }
+            )
+        classes_by_school: dict[int, list[dict[str, Any]]] = {}
+        for item in classes:
+            classes_by_school.setdefault(item.school_id, []).append(
+                {"id": item.id, "name": item.name, "contacts": contacts_by_class.get(item.id, [])}
+            )
+        return [
+            {"id": school.id, "name": school.name, "classes": classes_by_school.get(school.id, [])}
+            for school in schools
+        ]
 
 
 @router.post("/api/classes")
@@ -92,9 +85,7 @@ def create_class(data: ClassIn) -> dict[str, Any]:
 
 
 @router.patch("/api/schools/{school_id}")
-def update_school(
-    school_id: int, data: SchoolUpdateIn
-) -> dict[str, Any]:
+def update_school(school_id: int, data: SchoolUpdateIn) -> dict[str, Any]:
     with session_scope() as session:
         school = session.get(School, school_id)
         if school is None:
@@ -124,9 +115,9 @@ def delete_school(school_id: int) -> dict[str, str]:
             client_filter = client_filter | Client.class_id.in_(class_ids)
         client_ids = session.scalars(select(Client.id).where(client_filter)).all()
         if client_ids:
-            session.query(DeliveryTask).filter(
-                DeliveryTask.client_id.in_(client_ids)
-            ).delete(synchronize_session=False)
+            session.query(DeliveryTask).filter(DeliveryTask.client_id.in_(client_ids)).delete(
+                synchronize_session=False
+            )
             session.query(Client).filter(Client.id.in_(client_ids)).delete(
                 synchronize_session=False
             )
@@ -139,11 +130,8 @@ def delete_school(school_id: int) -> dict[str, str]:
     return {"status": "deleted"}
 
 
-
 @router.patch("/api/classes/{class_id}")
-def update_class(
-    class_id: int, data: ClassUpdateIn
-) -> dict[str, Any]:
+def update_class(class_id: int, data: ClassUpdateIn) -> dict[str, Any]:
     with session_scope() as session:
         item = session.get(SchoolClass, class_id)
         if item is None:
@@ -168,13 +156,11 @@ def delete_class(class_id: int) -> dict[str, str]:
         item = session.get(SchoolClass, class_id)
         if item is None:
             raise HTTPException(404, "Класс не найден")
-        client_ids = session.scalars(
-            select(Client.id).where(Client.class_id == class_id)
-        ).all()
+        client_ids = session.scalars(select(Client.id).where(Client.class_id == class_id)).all()
         if client_ids:
-            session.query(DeliveryTask).filter(
-                DeliveryTask.client_id.in_(client_ids)
-            ).delete(synchronize_session=False)
+            session.query(DeliveryTask).filter(DeliveryTask.client_id.in_(client_ids)).delete(
+                synchronize_session=False
+            )
             session.query(Client).filter(Client.id.in_(client_ids)).delete(
                 synchronize_session=False
             )

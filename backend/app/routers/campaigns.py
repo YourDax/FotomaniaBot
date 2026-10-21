@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from ..db import session_scope
 from ..message_sets import (
@@ -54,9 +55,7 @@ def _resolve_role_messages(plural: list[str] | None, single: str | None) -> list
         raise HTTPException(422, str(exc)) from exc
 
 
-def _apply_messages(
-    campaign: Campaign, kr: list[str], rk: list[str], generic: str = ""
-) -> None:
+def _apply_messages(campaign: Campaign, kr: list[str], rk: list[str], generic: str = "") -> None:
     """Сохраняет наборы текстов и зеркалит первые тексты в прежние поля."""
     campaign.messages_kr = dump_messages(kr)
     campaign.messages_rk = dump_messages(rk)
@@ -71,7 +70,9 @@ def _fill_task(task: DeliveryTask, campaign: Campaign, contact: Client) -> bool:
     return rebuild_task_messages(task, texts)
 
 
-MESSAGE_EDITABLE_STATUSES = frozenset({"PENDING", "REQUIRES_REVIEW", "CONTACT_NOT_FOUND", "MAX_ERROR"})
+MESSAGE_EDITABLE_STATUSES = frozenset(
+    {"PENDING", "REQUIRES_REVIEW", "CONTACT_NOT_FOUND", "MAX_ERROR"}
+)
 MESSAGE_ROLES = frozenset({"KR", "RK"})
 MAX_TEMPLATES_PER_ROLE = 100
 
@@ -99,10 +100,22 @@ def template_dict(template: MessageTemplate) -> dict[str, Any]:
     }
 
 
-def campaign_dict(campaign: Campaign, tasks: list[DeliveryTask]) -> dict[str, Any]:
-    statuses: dict[str, int] = {}
-    for task in tasks:
-        statuses[task.status] = statuses.get(task.status, 0) + 1
+def status_counts(session: Any, campaign_ids: list[int]) -> dict[int, dict[str, int]]:
+    """Число заданий по статусам для каждой рассылки — одним запросом."""
+    counts: dict[int, dict[str, int]] = {campaign_id: {} for campaign_id in campaign_ids}
+    if not campaign_ids:
+        return counts
+    rows = session.execute(
+        select(DeliveryTask.campaign_id, DeliveryTask.status, func.count())
+        .where(DeliveryTask.campaign_id.in_(campaign_ids))
+        .group_by(DeliveryTask.campaign_id, DeliveryTask.status)
+    ).all()
+    for campaign_id, status, count in rows:
+        counts[campaign_id][status] = count
+    return counts
+
+
+def campaign_dict(campaign: Campaign, statuses: dict[str, int]) -> dict[str, Any]:
     return {
         "id": campaign.id,
         "name": campaign.name,
@@ -119,12 +132,14 @@ def campaign_dict(campaign: Campaign, tasks: list[DeliveryTask]) -> dict[str, An
         "started_at": campaign.started_at,
         "finished_at": campaign.finished_at,
         "stop_reason": campaign.stop_reason,
-        "task_count": len(tasks),
+        "task_count": sum(statuses.values()),
         "status_counts": statuses,
     }
 
 
-def task_dict(task: DeliveryTask, contact: Client, school_name: str, class_name: str) -> dict[str, Any]:
+def task_dict(
+    task: DeliveryTask, contact: Client, school_name: str, class_name: str
+) -> dict[str, Any]:
     return {
         "id": task.id,
         "campaign_id": task.campaign_id,
@@ -147,27 +162,33 @@ def task_dict(task: DeliveryTask, contact: Client, school_name: str, class_name:
         "attempts": task.attempts,
         "error": task.error,
         "requires_review": task.requires_review,
-        "message_id": task.message_id,
         "opened_at": task.opened_at,
         "operator_confirmed_at": task.operator_confirmed_at,
         "operator_result": task.operator_result,
         "browser_prepared_at": task.browser_prepared_at,
         "browser_error": task.browser_error,
         "created_at": task.created_at,
+        "updated_at": task.updated_at,
         "started_at": task.started_at,
         "finished_at": task.finished_at,
     }
 
 
-def load_campaign_tasks(session: Any, campaign_id: int) -> list[dict[str, Any]]:
-    rows = session.execute(
+def load_campaign_tasks(
+    session: Any, campaign_id: int, since: datetime | None = None
+) -> list[dict[str, Any]]:
+    """Задания рассылки; с `since` — только изменённые не раньше этого момента (UTC)."""
+    statement = (
         select(DeliveryTask, Client, School.name, SchoolClass.name)
         .join(Client, Client.id == DeliveryTask.client_id)
         .outerjoin(SchoolClass, SchoolClass.id == Client.class_id)
         .outerjoin(School, School.id == Client.school_id)
         .where(DeliveryTask.campaign_id == campaign_id)
         .order_by(DeliveryTask.id)
-    ).all()
+    )
+    if since is not None:
+        statement = statement.where(DeliveryTask.updated_at >= since)
+    rows = session.execute(statement).all()
     return [
         task_dict(task, contact, school_name or "", class_name or "")
         for task, contact, school_name, class_name in rows
@@ -178,13 +199,8 @@ def load_campaign_tasks(session: Any, campaign_id: int) -> list[dict[str, Any]]:
 def list_campaigns() -> list[dict[str, Any]]:
     with session_scope() as session:
         campaigns = session.scalars(select(Campaign).order_by(Campaign.id.desc())).all()
-        result = []
-        for campaign in campaigns:
-            tasks = session.scalars(
-                select(DeliveryTask).where(DeliveryTask.campaign_id == campaign.id)
-            ).all()
-            result.append(campaign_dict(campaign, list(tasks)))
-        return result
+        counts = status_counts(session, [campaign.id for campaign in campaigns])
+        return [campaign_dict(campaign, counts[campaign.id]) for campaign in campaigns]
 
 
 @router.post("/api/campaigns")
@@ -227,11 +243,7 @@ def create_campaign(data: CampaignIn) -> dict[str, Any]:
             _remember_template(session, "RK", text)
         session.commit()
         session.refresh(campaign)
-        tasks = session.scalars(
-            select(DeliveryTask).where(DeliveryTask.campaign_id == campaign.id)
-        ).all()
-        return campaign_dict(campaign, list(tasks))
-
+        return campaign_dict(campaign, status_counts(session, [campaign.id])[campaign.id])
 
 
 @router.get("/api/campaigns/{campaign_id}")
@@ -240,16 +252,41 @@ def get_campaign(campaign_id: int) -> dict[str, Any]:
         campaign = session.get(Campaign, campaign_id)
         if campaign is None:
             raise HTTPException(404, "Кампания не найдена")
-        tasks = session.scalars(
-            select(DeliveryTask).where(DeliveryTask.campaign_id == campaign_id)
-        ).all()
-        return campaign_dict(campaign, list(tasks))
+        return campaign_dict(campaign, status_counts(session, [campaign_id])[campaign_id])
 
 
 @router.get("/api/campaigns/{campaign_id}/tasks")
 def campaign_tasks(campaign_id: int) -> list[dict[str, Any]]:
     with session_scope() as session:
         return load_campaign_tasks(session, campaign_id)
+
+
+# Запас на транзакции, которые записали updated_at раньше, чем стали видны другим запросам.
+CHANGES_CURSOR_OVERLAP = timedelta(seconds=5)
+
+
+@router.get("/api/campaigns/{campaign_id}/tasks/changes")
+def campaign_task_changes(campaign_id: int, since: datetime | None = None) -> dict[str, Any]:
+    """Изменившиеся с `since` задания, список всех id (для удалений) и новый курсор.
+
+    Без `since` возвращаются все задания. Клиент хранит `cursor` и передаёт его
+    в следующий запрос: при отсутствии изменений ответ почти пустой.
+    """
+    if since is not None:
+        since = (
+            since.astimezone(timezone.utc) if since.tzinfo else since.replace(tzinfo=timezone.utc)
+        )
+    cursor = now() - CHANGES_CURSOR_OVERLAP
+    with session_scope() as session:
+        if session.get(Campaign, campaign_id) is None:
+            raise HTTPException(404, "Кампания не найдена")
+        changed = load_campaign_tasks(session, campaign_id, since)
+        ids = session.scalars(
+            select(DeliveryTask.id)
+            .where(DeliveryTask.campaign_id == campaign_id)
+            .order_by(DeliveryTask.id)
+        ).all()
+    return {"changed": changed, "ids": list(ids), "cursor": cursor.isoformat()}
 
 
 @router.post("/api/campaigns/{campaign_id}/start")
@@ -269,9 +306,7 @@ def start_campaign(campaign_id: int) -> dict[str, Any]:
 
 
 @router.post("/api/campaigns/{campaign_id}/stop")
-def stop_campaign(
-    campaign_id: int, reason: str = ""
-) -> dict[str, Any]:
+def stop_campaign(campaign_id: int, reason: str = "") -> dict[str, Any]:
     with session_scope() as session:
         campaign = session.get(Campaign, campaign_id)
         if campaign is None:
@@ -289,9 +324,9 @@ def delete_campaign(campaign_id: int) -> dict[str, str]:
         campaign = session.get(Campaign, campaign_id)
         if campaign is None:
             raise HTTPException(404, "Кампания не найдена")
-        session.query(DeliveryTask).filter(
-            DeliveryTask.campaign_id == campaign_id
-        ).delete(synchronize_session=False)
+        session.query(DeliveryTask).filter(DeliveryTask.campaign_id == campaign_id).delete(
+            synchronize_session=False
+        )
         session.delete(campaign)
         session.commit()
     return {"status": "deleted"}
@@ -306,15 +341,16 @@ def delete_campaigns(data: CampaignDeleteIn) -> dict[str, int]:
         ).all()
         if not existing_ids:
             raise HTTPException(404, "Выбранные кампании не найдены")
-        session.query(DeliveryTask).filter(
-            DeliveryTask.campaign_id.in_(existing_ids)
-        ).delete(synchronize_session=False)
-        deleted = session.query(Campaign).filter(
-            Campaign.id.in_(existing_ids)
-        ).delete(synchronize_session=False)
+        session.query(DeliveryTask).filter(DeliveryTask.campaign_id.in_(existing_ids)).delete(
+            synchronize_session=False
+        )
+        deleted = (
+            session.query(Campaign)
+            .filter(Campaign.id.in_(existing_ids))
+            .delete(synchronize_session=False)
+        )
         session.commit()
     return {"deleted": deleted}
-
 
 
 @router.get("/api/message-templates/{role}")
@@ -332,9 +368,7 @@ def list_message_templates(role: str) -> list[dict[str, Any]]:
 
 
 @router.patch("/api/campaigns/{campaign_id}/messages")
-def update_campaign_messages(
-    campaign_id: int, data: CampaignMessagesIn
-) -> dict[str, Any]:
+def update_campaign_messages(campaign_id: int, data: CampaignMessagesIn) -> dict[str, Any]:
     message_kr = _resolve_role_messages(data.messages_kr, data.message_kr)
     message_rk = _resolve_role_messages(data.messages_rk, data.message_rk)
     if not message_kr and not message_rk:
@@ -361,11 +395,8 @@ def update_campaign_messages(
             if _fill_task(task, campaign, contact):
                 updated += 1
         session.commit()
-        tasks = session.scalars(
-            select(DeliveryTask).where(DeliveryTask.campaign_id == campaign_id)
-        ).all()
         return {
             "updated": updated,
             "skipped": skipped,
-            "campaign": campaign_dict(campaign, list(tasks)),
+            "campaign": campaign_dict(campaign, status_counts(session, [campaign_id])[campaign_id]),
         }

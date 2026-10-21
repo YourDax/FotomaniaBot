@@ -54,9 +54,9 @@ def _page(label: str | None, count: int = 1) -> Any:
 
 
 def test_normalize_ignores_case_yo_dashes_and_spaces() -> None:
-    assert normalize_contact_name("  РК   Тест 5В –  2026 Амалия  Ивановна ") == normalize_contact_name(
-        "рк тест 5в - 2026 амалия ивановна"
-    )
+    assert normalize_contact_name(
+        "  РК   Тест 5В –  2026 Амалия  Ивановна "
+    ) == normalize_contact_name("рк тест 5в - 2026 амалия ивановна")
     assert normalize_contact_name("Ёлка") == normalize_contact_name("елка")
 
 

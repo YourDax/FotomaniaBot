@@ -100,7 +100,7 @@ function Test-Dependencies {
     if ((Get-Content -LiteralPath $script:DependencyStamp -Raw).Trim() -ne $script:PythonVersion) { return $false }
     $previousErrorActionPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    Invoke-Python -Arguments @('-c', 'import fastapi, openpyxl, playwright, sqlalchemy, uvicorn; from pydantic import BaseModel; from pydantic_settings import BaseSettings') *> $null
+    Invoke-Python -Arguments @('-c', 'import fastapi, openpyxl, playwright, sqlalchemy, uvicorn; from pydantic import BaseModel') *> $null
     $dependencyExitCode = $LASTEXITCODE
     $ErrorActionPreference = $previousErrorActionPreference
     return $dependencyExitCode -eq 0

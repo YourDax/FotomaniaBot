@@ -45,15 +45,32 @@ MIGRATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "ALTER TABLE delivery_tasks ADD COLUMN messages TEXT",
         ),
     ),
+    (
+        "0006_task_campaign_status_index",
+        (
+            "CREATE INDEX IF NOT EXISTS ix_delivery_tasks_campaign_status "
+            "ON delivery_tasks(campaign_id, status)",
+        ),
+    ),
+    (
+        "0007_task_updated_at",
+        (
+            "ALTER TABLE delivery_tasks ADD COLUMN updated_at DATETIME",
+            "UPDATE delivery_tasks SET updated_at = COALESCE(finished_at, started_at, created_at) "
+            "WHERE updated_at IS NULL",
+        ),
+    ),
 )
 
 
-def _add_column_if_missing(connection: object, statement: str) -> None:
+def _apply_statement(connection: object, statement: str) -> None:
+    """Выполняет оператор миграции; ADD COLUMN пропускается, если колонка уже есть."""
+    if " ADD COLUMN " not in statement:
+        connection.exec_driver_sql(statement)
+        return
     table = statement.split(" ADD COLUMN ", 1)[0].split("ALTER TABLE ", 1)[1]
     column = statement.split(" ADD COLUMN ", 1)[1].split()[0]
-    existing = {
-        row[1] for row in connection.exec_driver_sql(f"PRAGMA table_info({table})").all()
-    }
+    existing = {row[1] for row in connection.exec_driver_sql(f"PRAGMA table_info({table})").all()}
     if column not in existing:
         connection.exec_driver_sql(statement)
 
@@ -74,11 +91,13 @@ def apply_migrations(engine: Engine) -> None:
     """Apply each missing revision once; tolerate columns created by newer metadata."""
     try:
         with engine.begin() as connection:
-            existing_tables = set(connection.exec_driver_sql(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            ).scalars().all())
+            existing_tables = set(
+                connection.exec_driver_sql("SELECT name FROM sqlite_master WHERE type = 'table'")
+                .scalars()
+                .all()
+            )
             # A completely new database already has the current schema from metadata.
-            if not {"clients", "campaigns", "delivery_tasks", "settings"}.issubset(existing_tables):
+            if not {"clients", "campaigns", "delivery_tasks"}.issubset(existing_tables):
                 return
             connection.exec_driver_sql(
                 "CREATE TABLE IF NOT EXISTS schema_migrations "
@@ -91,15 +110,16 @@ def apply_migrations(engine: Engine) -> None:
                 if revision in applied:
                     continue
                 for statement in statements:
-                    _add_column_if_missing(connection, statement)
+                    _apply_statement(connection, statement)
                 if revision == "0003_task_manual_review_fields":
                     connection.exec_driver_sql(
                         "UPDATE campaigns SET mode = 'manual' WHERE mode = 'simulator'"
                     )
-                    connection.exec_driver_sql(
-                        "UPDATE settings SET value = 'manual' "
-                        "WHERE key = 'delivery_mode' AND value = 'simulator'"
-                    )
+                    if "settings" in existing_tables:  # таблица осталась только в старых базах
+                        connection.exec_driver_sql(
+                            "UPDATE settings SET value = 'manual' "
+                            "WHERE key = 'delivery_mode' AND value = 'simulator'"
+                        )
                 connection.exec_driver_sql(
                     "INSERT INTO schema_migrations (revision) VALUES (?)", (revision,)
                 )

@@ -20,12 +20,10 @@ from ..models import (
 from ..phones import normalize_phone
 from ..schemas import (
     ContactImport,
-    ImportConfirm,
 )
 from ..services import (
     detect_header_row,
 )
-from .clients import find_client_duplicate
 
 log = logging.getLogger("fotomaniabot")
 router = APIRouter()
@@ -52,7 +50,9 @@ def _rows_from_upload(filename: str, raw: bytes) -> list[list[Any]]:
         return rows
     text = raw.decode("utf-8-sig", errors="replace")
     counts = {candidate: text.count(candidate) for candidate in ",;\t|"}
-    delimiter = max(counts, key=lambda candidate: counts[candidate]) if any(counts.values()) else ","
+    delimiter = (
+        max(counts, key=lambda candidate: counts[candidate]) if any(counts.values()) else ","
+    )
     return [list(row) for row in csv.reader(io.StringIO(text), delimiter=delimiter)]
 
 
@@ -88,9 +88,7 @@ def _build_preview(rows: list[list[Any]]) -> dict[str, Any]:
 
 
 @router.post("/api/imports/preview")
-async def import_preview(
-    file: Annotated[UploadFile, File()]
-) -> dict[str, Any]:
+async def import_preview(file: Annotated[UploadFile, File()]) -> dict[str, Any]:
     raw = await file.read()
     if len(raw) > MAX_UPLOAD_BYTES:
         raise HTTPException(413, "Файл слишком большой (максимум 10 МБ)")
@@ -99,48 +97,6 @@ async def import_preview(
     except Exception as exc:
         raise HTTPException(400, f"Не удалось прочитать файл: {exc}") from exc
     return _build_preview(rows)
-
-
-@router.post("/api/imports/confirm")
-def import_confirm(data: ImportConfirm) -> dict[str, int]:
-    created = updated = skipped = 0
-    with session_scope() as session:
-        for row in data.rows:
-            values: dict[str, Any] = {}
-            for header, field in data.mapping.items():
-                if field in {"name", "phone", "max_user_id", "username", "chat_link"}:
-                    values[field] = row.get(header)
-            name = (values.get("name") or "").strip()
-            if not name:
-                skipped += 1
-                continue
-            values["phone"] = normalize_phone(values.get("phone"))
-            duplicate = find_client_duplicate(session, values)
-            if duplicate is not None:
-                if data.duplicate_mode == "update":
-                    duplicate.name = name
-                    duplicate.phone = values.get("phone") or duplicate.phone
-                    duplicate.chat_link = values.get("chat_link") or duplicate.chat_link
-                    duplicate.max_user_id = values.get("max_user_id") or duplicate.max_user_id
-                    duplicate.username = values.get("username") or duplicate.username
-                    updated += 1
-                else:
-                    skipped += 1
-                continue
-            session.add(
-                Client(
-                    name=name,
-                    phone=values.get("phone"),
-                    max_user_id=values.get("max_user_id"),
-                    username=values.get("username"),
-                    chat_link=values.get("chat_link"),
-                    source="import",
-                )
-            )
-            created += 1
-        session.commit()
-    return {"created": created, "updated": updated, "skipped": skipped}
-
 
 
 def _resolve_school(session: Any, school_name: str) -> School:
@@ -165,9 +121,7 @@ def _resolve_class(session: Any, school_id: int, class_name: str) -> SchoolClass
     if not value:
         value = "Без класса"
     item = session.scalar(
-        select(SchoolClass).where(
-            SchoolClass.school_id == school_id, SchoolClass.name == value
-        )
+        select(SchoolClass).where(SchoolClass.school_id == school_id, SchoolClass.name == value)
     )
     if item is None:
         item = SchoolClass(school_id=school_id, name=value)
@@ -193,9 +147,7 @@ def _import_row_value(row: dict[str, Any], header: str | None) -> Any:
 
 
 @router.post("/api/imports/school-contacts")
-def import_school_contacts(
-    data: ContactImport
-) -> dict[str, int]:
+def import_school_contacts(data: ContactImport) -> dict[str, int]:
     if not data.school_name:
         raise HTTPException(400, "Не указано название школы")
     created = updated = skipped = 0
@@ -210,7 +162,9 @@ def import_school_contacts(
     with session_scope() as session:
         school = _resolve_school(session, data.school_name)
         for row in data.rows:
-            class_name = str(_import_row_value(row, class_header) or "").strip() if class_header else ""
+            class_name = (
+                str(_import_row_value(row, class_header) or "").strip() if class_header else ""
+            )
             if class_name:
                 last_class_name = class_name
             elif last_class_name:
@@ -229,7 +183,9 @@ def import_school_contacts(
                     continue
                 phone_header = headers_by_field.get(phone_field)
                 phone = normalize_phone(
-                    str(_import_row_value(row, phone_header) or "").strip() if phone_header else None
+                    str(_import_row_value(row, phone_header) or "").strip()
+                    if phone_header
+                    else None
                 )
                 duplicate = session.scalar(
                     select(Client).where(

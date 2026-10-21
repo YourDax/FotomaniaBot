@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -18,18 +19,16 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 
-from . import worker
+from . import max_browser, worker
 from .db import BASE_DIR, DATABASE_URL, engine
 from .migrations import apply_migrations
 from .models import Base
-from .routers import campaigns, clients, imports, reports, schools, settings, tasks
+from .routers import campaigns, clients, imports, reports, schools, tasks
 
 log = logging.getLogger("fotomaniabot")
 LOG_DIR = BASE_DIR / "logs"
 LOG_DIR.mkdir(exist_ok=True)
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 if not any(isinstance(handler, logging.FileHandler) for handler in log.handlers):
     file_handler = RotatingFileHandler(
         LOG_DIR / "session.log",
@@ -37,9 +36,7 @@ if not any(isinstance(handler, logging.FileHandler) for handler in log.handlers)
         backupCount=5,
         encoding="utf-8",
     )
-    file_handler.setFormatter(
-        logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
-    )
+    file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
     log.addHandler(file_handler)
     # Сообщения uvicorn (запуск, ошибки, доступ) тоже сохраняем в журнал сессии.
     for _name in ("uvicorn.error", "uvicorn.access"):
@@ -78,6 +75,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         worker.stop_worker()
+        max_browser.shutdown()
 
 
 app = FastAPI(title="MAX Рассылки", version="1.0.0", lifespan=lifespan)
@@ -93,7 +91,9 @@ async def request_logging(request: Request, call_next: Any) -> Any:
     try:
         response = await call_next(request)
     except Exception:
-        log.exception("request.error id=%s method=%s path=%s", request_id, request.method, request.url.path)
+        log.exception(
+            "request.error id=%s method=%s path=%s", request_id, request.method, request.url.path
+        )
         raise
     duration_ms = round((time.monotonic() - started) * 1000)
     response.headers["X-Request-ID"] = request_id
@@ -111,14 +111,12 @@ def web_app() -> FileResponse:
     return FileResponse(WEB_ROOT / "index.html", headers=NO_CACHE)
 
 
-# Без этого браузер эвристически кеширует app.js и работает со старым скриптом
+# Без этого браузер эвристически кеширует скрипты и работает со старым кодом
 # поверх нового index.html; no-cache заставляет проверять ETag при каждой загрузке.
 NO_CACHE = {"Cache-Control": "no-cache"}
 
-UI_ASSETS: dict[str, str] = {
-    "styles.css": "text/css; charset=utf-8",
-    "app.js": "text/javascript; charset=utf-8",
-}
+UI_ASSETS: dict[str, str] = {"styles.css": "text/css; charset=utf-8"}
+JS_MODULE_NAME = re.compile(r"^[a-z_]+\.js$")
 
 
 @app.get("/static/{asset_name}", include_in_schema=False)
@@ -135,6 +133,15 @@ def ui_asset(asset_name: str) -> FileResponse:
     return FileResponse(path, media_type=media_type, headers=NO_CACHE)
 
 
+@app.get("/static/js/{asset_name}", include_in_schema=False)
+def ui_script(asset_name: str) -> FileResponse:
+    """ES-модули интерфейса (static/js/*.js) с явным JavaScript MIME-типом."""
+    path = WEB_ROOT / "js" / asset_name
+    if not JS_MODULE_NAME.match(asset_name) or not path.is_file():
+        raise HTTPException(404, "Модуль интерфейса не найден")
+    return FileResponse(path, media_type="text/javascript; charset=utf-8", headers=NO_CACHE)
+
+
 @app.get("/api/health")
 def health() -> dict[str, Any]:
     return {
@@ -145,5 +152,5 @@ def health() -> dict[str, Any]:
     }
 
 
-for _router in (schools, clients, campaigns, imports, settings, tasks, reports):
+for _router in (schools, clients, campaigns, imports, tasks, reports):
     app.include_router(_router.router)

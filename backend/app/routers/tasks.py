@@ -62,6 +62,27 @@ def _task_and_contact(session: Any, task_id: int) -> tuple[DeliveryTask, Client]
     return task, contact
 
 
+def _first_name(session: Any, task: DeliveryTask, contact: Client) -> str:
+    """Имя контакта в MAX по шаблону «РК|КР Школа Класс - Год Имя Отчество»."""
+    school = session.get(School, contact.school_id) if contact.school_id else None
+    school_class = session.get(SchoolClass, contact.class_id) if contact.class_id else None
+    return contact_first_name(
+        task.recipient_role,
+        school.name if school else "",
+        school_class.name if school_class else "",
+        contact.name,
+        now().astimezone().year,
+    )
+
+
+def _expected_name(session: Any, task: DeliveryTask, contact: Client) -> str | None:
+    """Ожидаемое имя открытого чата; None, если ФИО не удаётся разобрать."""
+    try:
+        return _first_name(session, task, contact)
+    except ValueError:
+        return None
+
+
 def _contact_identity(contact: Client) -> str:
     return contact.max_user_id or contact.chat_link or contact.username or ""
 
@@ -87,18 +108,7 @@ def prepare_max_task(
         message = messages[message_no - 1]["text"]
         if not message.strip():
             raise HTTPException(422, f"Текст сообщения №{message_no} пустой")
-        school = session.get(School, contact.school_id) if contact.school_id else None
-        school_class = session.get(SchoolClass, contact.class_id) if contact.class_id else None
-        try:
-            expected_name: str | None = contact_first_name(
-                task.recipient_role,
-                school.name if school else "",
-                school_class.name if school_class else "",
-                contact.name,
-                now().astimezone().year,
-            )
-        except ValueError:
-            expected_name = None
+        expected_name = _expected_name(session, task, contact)
     if not max_lock.acquire(blocking=False):
         raise HTTPException(409, MAX_BUSY_MESSAGE)
     try:
@@ -140,18 +150,7 @@ def open_max_task(task_id: int) -> dict[str, Any]:
         task, contact = _task_and_contact(session, task_id)
         client_name = contact.name
         identity = contact.phone or _contact_identity(contact)
-        school = session.get(School, contact.school_id) if contact.school_id else None
-        school_class = session.get(SchoolClass, contact.class_id) if contact.class_id else None
-        try:
-            expected_name: str | None = contact_first_name(
-                task.recipient_role,
-                school.name if school else "",
-                school_class.name if school_class else "",
-                contact.name,
-                now().astimezone().year,
-            )
-        except ValueError:
-            expected_name = None
+        expected_name = _expected_name(session, task, contact)
     if not max_lock.acquire(blocking=False):
         raise HTTPException(409, MAX_BUSY_MESSAGE)
     try:
@@ -184,16 +183,8 @@ def rename_max_task(task_id: int) -> dict[str, Any]:
         task, contact = _task_and_contact(session, task_id)
         if not contact.phone:
             raise HTTPException(502, "У контакта не указан номер телефона для поиска в MAX")
-        school = session.get(School, contact.school_id) if contact.school_id else None
-        school_class = session.get(SchoolClass, contact.class_id) if contact.class_id else None
         try:
-            first_name = contact_first_name(
-                task.recipient_role,
-                school.name if school else "",
-                school_class.name if school_class else "",
-                contact.name,
-                now().astimezone().year,
-            )
+            first_name = _first_name(session, task, contact)
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
         client_name = contact.name
@@ -219,9 +210,7 @@ def rename_max_task(task_id: int) -> dict[str, Any]:
 
 
 @router.patch("/api/tasks/{task_id}/message")
-def update_task_message(
-    task_id: int, data: TaskMessageIn
-) -> dict[str, Any]:
+def update_task_message(task_id: int, data: TaskMessageIn) -> dict[str, Any]:
     text = data.message.strip()
     if not text:
         raise HTTPException(422, "Текст сообщения не может быть пустым")
@@ -244,19 +233,8 @@ def update_task_message(
         }
 
 
-@router.post("/api/tasks/{task_id}/opened")
-def mark_task_opened(task_id: int) -> dict[str, Any]:
-    with session_scope() as session:
-        task, _contact = _task_and_contact(session, task_id)
-        task.opened_at = now()
-        session.commit()
-        return {"id": task.id, "opened_at": task.opened_at}
-
-
 @router.patch("/api/tasks/{task_id}/status")
-def update_task_status(
-    task_id: int, data: TaskStatusIn
-) -> dict[str, Any]:
+def update_task_status(task_id: int, data: TaskStatusIn) -> dict[str, Any]:
     with session_scope() as session:
         task, _contact = _task_and_contact(session, task_id)
         _guard_not_found_mark(task, data.status)
@@ -267,11 +245,8 @@ def update_task_status(
         return {"id": task.id, "status": task.status}
 
 
-
 @router.post("/api/tasks/{task_id}/confirm")
-def confirm_manual_task(
-    task_id: int, data: ManualResultIn
-) -> dict[str, Any]:
+def confirm_manual_task(task_id: int, data: ManualResultIn) -> dict[str, Any]:
     with session_scope() as session:
         task, _contact = _task_and_contact(session, task_id)
         mapping = {"sent": "SENT", "failed": "FAILED", "unknown": "UNKNOWN"}

@@ -106,12 +106,13 @@ backend/
     schemas.py     — Pydantic-схемы запросов
     services.py    — рендер сообщений, CSV-экранирование, разбор заголовков
     migrations.py  — упорядоченные миграции SQLite
-    max_browser.py — работа с уже авторизованной вкладкой MAX через CDP
+    max_browser/   — работа с уже авторизованной вкладкой MAX через CDP: connection (одно
+                     переиспользуемое подключение), page, search, editor, chat, rename
     main.py        — сборка приложения FastAPI, логирование, lifespan, статика
     worker.py      — фоновый воркер очереди заданий
     routers/       — маршруты по разделам: schools, clients, campaigns, imports,
-                     settings, tasks, reports
-    static/        — интерфейс оператора: index.html, styles.css, app.js
+                     tasks, reports
+    static/        — интерфейс оператора: index.html, styles.css, js/*.js (ES-модули, без сборки)
   tests/           — pytest: API и чистые функции
   run.py           — запуск uvicorn с настройками из окружения
 ```
@@ -122,8 +123,7 @@ backend/
 
 ## Настройки окружения
 
-Скопируйте `.env.example` в `.env` (или задайте переменные вручную) — все значения
-необязательны. Основные: `DATABASE_URL`, `APP_HOST`, `APP_PORT`, `APP_RELOAD`,
+Все переменные окружения необязательны (файл `.env` приложением не читается — задавайте их в окружении процесса). Основные: `DATABASE_URL`, `APP_HOST`, `APP_PORT`, `APP_RELOAD`,
 `MAX_CDP_URL`, `MAX_BROWSER_PROFILE_DIR`, `MAX_SAVE_DOM_LOG`.
 
 ## Разработка
@@ -137,4 +137,4 @@ cd backend
 
 ## Данные
 
-База находится в `backend\fotomaniabot.db`. Перед резервным копированием остановите backend и скопируйте этот файл. Не помещайте пароли или токены в репозиторий.
+База находится в `backend\fotomaniabot.db`. База работает в режиме WAL (рядом могут появляться файлы `fotomaniabot.db-wal` и `-shm`). Перед резервным копированием остановите backend — при остановке содержимое сливается в основной файл — и скопируйте `fotomaniabot.db`. Не помещайте пароли или токены в репозиторий.
