@@ -1,5 +1,7 @@
 # MAX Рассылки
 
+> **English summary.** A local web app for managing school-photography clients and preparing manual mailings: FastAPI + SQLAlchemy + SQLite backend, CSV/XLSX import with column mapping and duplicate handling, a background job queue, and an operator UI (vanilla JS ES modules). Message text is prepared in an already-signed-in browser tab via Playwright/CDP; sending is always confirmed by the operator. Tests: pytest; linting: ruff.
+
 Локальное приложение для управления клиентами и подготовки ручных рассылок через уже авторизованный интерфейс MAX. Данные остаются в SQLite на компьютере оператора.
 
 ## Важное ограничение MAX
