@@ -68,6 +68,17 @@ def _page_has_controls(page: Any) -> bool:
         return False
 
 
+def _click_back_button(back: Any) -> None:
+    """Click «Перейти назад». Playwright's click can be blocked by a transient overlay
+    (the arrow's <use> icon from a neighbouring layout subtree), so fall back to a DOM click.
+    """
+    try:
+        back.click(timeout=3000)
+    except Exception:
+        log.warning("MAX: кнопка «назад» перекрыта, нажимаю через DOM")
+        back.evaluate("(node) => node.click()")
+
+
 def _return_to_main_screen(page: Any) -> None:
     back = _first_visible_locator(
         page,
@@ -80,7 +91,7 @@ def _return_to_main_screen(page: Any) -> None:
         log.info("MAX: основной экран уже открыт, возврат не требуется")
         return
     log.info("MAX: ожидаю возврат на основной экран перед поиском")
-    back.click()
+    _click_back_button(back)
     page.wait_for_timeout(500)
     log.info("MAX: основной экран открыт")
 
@@ -513,6 +524,7 @@ def open_chat(client_name: str, identity: str) -> PreparationResult:
 
 
 CHAT_EDITOR_SELECTORS: list[str] = [
+    "div[data-text-entry='true'][contenteditable]",
     "textarea",
     "[contenteditable='true']",
     "[role='textbox']",
@@ -655,13 +667,61 @@ def _save_contact_name(
     return True
 
 
-def _reload_page(page: Any) -> None:
-    """Return from the contact form to the chat by reloading the MAX page."""
-    log.info("MAX: обновляю страницу, чтобы вернуться в чат")
-    page.reload(wait_until="domcontentloaded", timeout=20000)
-    page.wait_for_timeout(1500)
-    if _first_visible(page, CHAT_EDITOR_SELECTORS) is None:
-        log.warning("MAX: после обновления поле сообщения чата не найдено url=%s", page.url)
+CHAT_BACK_ATTEMPTS = 8
+FIRST_NAME_INPUT_SELECTOR = "input[name='firstName']"
+# Info/profile panel overlays the chat as an absolutely positioned layer with its own back arrow.
+OVERLAY_BACK_SELECTOR = "[class~='absolute'] button[aria-label*='назад' i]"
+CHAT_BACK_SELECTOR = "button[aria-label*='назад' i]"
+
+
+def _open_chat_editor(page: Any) -> Any | None:
+    """Return the visible message input only when the chat is really in front (no overlay, no contact form)."""
+    if _first_visible_locator(page, [page.locator(FIRST_NAME_INPUT_SELECTOR)]) is not None:
+        return None
+    if _first_visible_locator(page, [page.locator(OVERLAY_BACK_SELECTOR)]) is not None:
+        return None
+    return _first_visible(page, CHAT_EDITOR_SELECTORS)
+
+
+def _find_back_button(page: Any) -> Any | None:
+    """Prefer the overlay's back arrow: pressing the chat header's arrow would leave the chat."""
+    return _first_visible_locator(
+        page,
+        [page.locator(OVERLAY_BACK_SELECTOR), page.locator(CHAT_BACK_SELECTOR)],
+    )
+
+
+def _return_to_chat_after_rename(page: Any) -> None:
+    """Leave the contact form with the «назад» arrow until the chat input appears.
+
+    The page is never reloaded. The chat counts as open only when the message input
+    is visible and the contact form's first-name field is gone; the input is then clicked.
+    """
+    log.info("MAX: возвращаюсь в чат кнопкой «назад»")
+    clicks = 0
+    for _ in range(CHAT_BACK_ATTEMPTS):
+        editor = _open_chat_editor(page)
+        if editor is not None:
+            editor.click()
+            log.info("MAX: чат открыт, строка ввода активна (нажатий «назад»: %d)", clicks)
+            return
+        back = _find_back_button(page)
+        if back is None:
+            page.wait_for_timeout(300)
+            continue
+        clicks += 1
+        log.info("MAX: нажимаю «назад» (%d из %d)", clicks, CHAT_BACK_ATTEMPTS)
+        _click_back_button(back)
+        page.wait_for_timeout(700)
+    editor = _open_chat_editor(page)
+    if editor is not None:
+        editor.click()
+        log.info("MAX: чат открыт после последнего нажатия «назад» (нажатий: %d)", clicks)
+        return
+    _log_page_state(page, "rename-back-to-chat-failed")
+    raise MaxBrowserError(
+        "После переименования не удалось вернуться в чат MAX: строка ввода не открылась."
+    )
 
 
 def rename_contact(client_name: str, identity: str, first_name: str) -> RenameResult:
@@ -682,7 +742,7 @@ def rename_contact(client_name: str, identity: str, first_name: str) -> RenameRe
             _open_chat_for_rename(page, identity)
             first_name_input, add_mode = _open_profile_editor(page)
             changed = _save_contact_name(page, first_name_input, first_name, add_mode)
-            _reload_page(page)
+            _return_to_chat_after_rename(page)
             status = "CONTACT_RENAMED" if changed else "ALREADY_CORRECT"
             log.info("MAX: переименование для %s, статус=%s", client_name, status)
             return RenameResult(
