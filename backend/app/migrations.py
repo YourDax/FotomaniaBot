@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import sqlite3
+from datetime import datetime, timezone
+from pathlib import Path
+
 from sqlalchemy.engine import Engine
 
 
@@ -61,6 +65,65 @@ MIGRATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
 )
+
+
+LEGACY_REVISIONS = frozenset({"0004_unique_school_class"})  # применяется отдельно после цикла
+KNOWN_REVISIONS = frozenset(revision for revision, _ in MIGRATIONS) | LEGACY_REVISIONS
+KEEP_BACKUPS = 5
+
+
+def backup_before_upgrade(engine: Engine) -> Path | None:
+    """Перед миграцией существующей базы сохраняет её копию в `backups/` рядом с файлом.
+
+    Если база уже создана более новой версией приложения (в ней есть неизвестные
+    ревизии), запуск прерывается: старый код не должен менять чужую схему.
+    Новая и актуальная базы не копируются. Возвращает путь к копии или None.
+    """
+    database = engine.url.database
+    if engine.dialect.name != "sqlite" or not database or database == ":memory:":
+        return None
+    path = Path(database)
+    if not path.is_file() or path.stat().st_size == 0:
+        return None
+    source = sqlite3.connect(str(path))
+    try:
+        tables = {
+            row[0] for row in source.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        if "clients" not in tables:
+            return None  # не наша схема или пустая база: мигрировать нечего
+        applied: set[str] = set()
+        if "schema_migrations" in tables:
+            applied = {row[0] for row in source.execute("SELECT revision FROM schema_migrations")}
+        newer = sorted(applied - KNOWN_REVISIONS)
+        if newer:
+            raise MigrationError(
+                f"База данных создана более новой версией приложения (ревизии: {', '.join(newer)}). "
+                "Запустите свежую версию приложения или восстановите копию из папки backups."
+            )
+        if not KNOWN_REVISIONS - applied:
+            return None
+        backups = path.parent / "backups"
+        backups.mkdir(exist_ok=True)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        target = backups / f"{path.stem}-before-upgrade-{stamp}.db"
+        try:
+            copy = sqlite3.connect(str(target))
+            try:
+                source.backup(copy)
+            finally:
+                copy.close()
+        except (OSError, sqlite3.Error) as exc:
+            target.unlink(missing_ok=True)
+            raise MigrationError(
+                f"Не удалось сохранить резервную копию базы перед обновлением: {exc}. "
+                "Проверьте свободное место и права на папку данных."
+            ) from exc
+    finally:
+        source.close()
+    for stale in sorted(backups.glob(f"{path.stem}-before-upgrade-*.db"))[:-KEEP_BACKUPS]:
+        stale.unlink(missing_ok=True)
+    return target
 
 
 def _apply_statement(connection: object, statement: str) -> None:

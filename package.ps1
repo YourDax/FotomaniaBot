@@ -22,7 +22,9 @@ try {
         -not (Get-ChildItem -LiteralPath (Join-Path $runtime 'ms-playwright') -Directory -Filter 'chromium-*' -ErrorAction SilentlyContinue | Select-Object -First 1)) {
         throw 'Runtime неполный: не найдены зависимости или Chromium.'
     }
-    Set-Content -LiteralPath (Join-Path $runtime 'chromium-installed.txt') -Value 'installed' -Encoding ascii
+    # Отметка той же формы, что проверяет prepare.ps1: браузер из архива не докачивается.
+    $playwrightVersion = [regex]::Match((Get-Content -LiteralPath (Join-Path $root 'backend\requirements.txt') -Raw), '(?im)^\s*playwright==([\w.]+)').Groups[1].Value
+    Set-Content -LiteralPath (Join-Path $runtime "ms-playwright\chromium-$playwrightVersion.stamp") -Value 'installed' -Encoding ascii
 
     New-Item -ItemType Directory -Force -Path $stage, $outputDir | Out-Null
     Write-Host 'Копирование файлов приложения (без базы, профиля браузера и тестовых данных)...'

@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, TypeVar
 
+from ..data_dir import PROFILE_DIR, adopt_legacy_profile
 from ..db import BASE_DIR
 from .page import _page_has_controls
 from .results import MaxBrowserError
@@ -65,9 +66,9 @@ def _ensure_cdp_endpoint(playwright: Any, cdp_url: str) -> None:
 
     port = cdp_url.rsplit(":", 1)[-1].rstrip("/")
     configured_profile = os.getenv("MAX_BROWSER_PROFILE_DIR")
-    profile = (
-        Path(configured_profile) if configured_profile else (PROJECT_ROOT / ".max-browser-profile")
-    )
+    if not configured_profile:
+        adopt_legacy_profile()
+    profile = Path(configured_profile) if configured_profile else PROFILE_DIR
     if not profile.is_absolute():
         profile = PROJECT_ROOT / profile
     profile = profile.resolve()

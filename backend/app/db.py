@@ -15,8 +15,12 @@ from pathlib import Path
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
+from .data_dir import DB_PATH, adopt_legacy_database
+
 BASE_DIR = Path(__file__).resolve().parents[1]
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'fotomaniabot.db'}")
+if "DATABASE_URL" not in os.environ:
+    adopt_legacy_database()
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH.as_posix()}")
 
 
 class Base(DeclarativeBase):

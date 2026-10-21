@@ -9,19 +9,25 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 $script:Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$script:RuntimeDir = Join-Path $script:Root '.runtime'
 $script:Python = $null
 $script:PythonPrefix = @()
 $script:PythonVersion = $null
-$script:Packages = Join-Path $script:RuntimeDir 'packages'
-$script:BrowserPath = Join-Path $script:RuntimeDir 'ms-playwright'
 $script:Requirements = Join-Path $script:Root 'backend\requirements.txt'
-$script:BrowserStamp = Join-Path $script:RuntimeDir 'chromium-installed.txt'
-$script:DependencyStamp = Join-Path $script:RuntimeDir 'packages-python.txt'
-
-$env:PYTHONPATH = $script:Packages
-$env:PLAYWRIGHT_BROWSERS_PATH = $script:BrowserPath
 $script:PackageMode = $Package
+
+# Каталог данных (база, журналы, профиль MAX) и общий кэш зависимостей лежат вне папки
+# приложения, поэтому новая версия, распакованная в другую папку, их не пересоздаёт.
+if ($env:MAX_DATA_DIR) { $script:DataDir = $env:MAX_DATA_DIR }
+elseif ($env:LOCALAPPDATA) { $script:DataDir = Join-Path $env:LOCALAPPDATA 'MAX-Rassylki' }
+else { $script:DataDir = Join-Path $env:USERPROFILE '.max-rassylki' }
+$env:MAX_DATA_DIR = $script:DataDir
+$script:PidFile = Join-Path $script:DataDir 'backend.pid'
+
+# Заполняются в Initialize-Runtime после выбора Python.
+$script:RuntimeDir = $null
+$script:Packages = $null
+$script:BrowserPath = $null
+$script:DependencyStamp = $null
 
 function Resolve-Python {
     $candidates = @()
@@ -94,10 +100,50 @@ function Invoke-Python {
     return $LASTEXITCODE
 }
 
+function Get-RequirementsHash {
+    # Перенос строк не должен менять хэш: GitHub-архив и клон дают разные окончания строк.
+    $text = (Get-Content -LiteralPath $script:Requirements -Raw) -replace "`r`n", "`n"
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($text))
+    }
+    finally {
+        $sha.Dispose()
+    }
+    return (($bytes | ForEach-Object { $_.ToString('x2') }) -join '').Substring(0, 12)
+}
+
+function Get-PlaywrightVersion {
+    $match = [regex]::Match((Get-Content -LiteralPath $script:Requirements -Raw), '(?im)^\s*playwright==([\w.]+)')
+    if ($match.Success) { return $match.Groups[1].Value }
+    return 'unknown'
+}
+
+function Initialize-RuntimePaths {
+    $localRuntime = Join-Path $script:Root '.runtime'
+    $hash = Get-RequirementsHash
+    # Переносимый архив (package.bat) и старые установки держат runtime рядом с приложением;
+    # во всех остальных случаях зависимости общие для всех версий с тем же requirements.txt.
+    if ($script:PackageMode -or (Test-Path -LiteralPath (Join-Path $localRuntime 'packages'))) {
+        $script:RuntimeDir = $localRuntime
+        $script:BrowserPath = Join-Path $localRuntime 'ms-playwright'
+    }
+    else {
+        $script:RuntimeDir = Join-Path $script:DataDir "runtime\py$($script:PythonVersion)-$hash"
+        $script:BrowserPath = Join-Path $script:DataDir 'ms-playwright'
+    }
+    $script:Packages = Join-Path $script:RuntimeDir 'packages'
+    $script:DependencyStamp = Join-Path $script:RuntimeDir 'packages-stamp.txt'
+    $script:StampValue = "$($script:PythonVersion)|$hash"
+    New-Item -ItemType Directory -Force -Path $script:DataDir, $script:RuntimeDir | Out-Null
+    $env:PYTHONPATH = $script:Packages
+    $env:PLAYWRIGHT_BROWSERS_PATH = $script:BrowserPath
+}
+
 function Test-Dependencies {
     if (-not (Test-Path -LiteralPath $script:Packages)) { return $false }
     if (-not (Test-Path -LiteralPath $script:DependencyStamp)) { return $false }
-    if ((Get-Content -LiteralPath $script:DependencyStamp -Raw).Trim() -ne $script:PythonVersion) { return $false }
+    if ((Get-Content -LiteralPath $script:DependencyStamp -Raw).Trim() -ne $script:StampValue) { return $false }
     $previousErrorActionPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     Invoke-Python -Arguments @('-c', 'import fastapi, openpyxl, playwright, sqlalchemy, uvicorn; from pydantic import BaseModel') *> $null
@@ -106,59 +152,124 @@ function Test-Dependencies {
     return $dependencyExitCode -eq 0
 }
 
+function Remove-StaleRuntimes {
+    # Оставляем две последние версии зависимостей (текущую и предыдущую для отката).
+    $root = Join-Path $script:DataDir 'runtime'
+    if ($script:RuntimeDir -notlike "$root*") { return }
+    (Get-Item -LiteralPath $script:RuntimeDir).LastWriteTime = Get-Date
+    $stale = Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending | Select-Object -Skip 2
+    foreach ($directory in $stale) {
+        try { Remove-Item -LiteralPath $directory.FullName -Recurse -Force -ErrorAction Stop }
+        catch { }  # папку может держать запущенная старая версия — удалим при следующем запуске
+    }
+}
+
 function Initialize-Runtime {
     Resolve-Python
-    New-Item -ItemType Directory -Force -Path $script:RuntimeDir | Out-Null
+    Initialize-RuntimePaths
 
-    Invoke-Python -Arguments @('-m', 'pip', '--version') *> $null
-    if ($LASTEXITCODE -ne 0) {
-        throw "В установленном Python $($script:PythonVersion) отсутствует pip. Установите/включите pip для этого Python обычным способом."
+    if (Test-Dependencies) {
+        Write-Host 'Зависимости приложения уже установлены.'
     }
-
-    if (-not (Test-Dependencies)) {
+    else {
+        Invoke-Python -Arguments @('-m', 'pip', '--version') *> $null
+        if ($LASTEXITCODE -ne 0) {
+            throw "В установленном Python $($script:PythonVersion) отсутствует pip. Установите/включите pip для этого Python обычным способом."
+        }
         if (Test-Path -LiteralPath $script:Packages) {
             Remove-Item -LiteralPath $script:Packages -Recurse -Force
         }
+        Remove-Item -LiteralPath $script:DependencyStamp -Force -ErrorAction SilentlyContinue
         New-Item -ItemType Directory -Force -Path $script:Packages | Out-Null
-        Write-Host 'Установка зависимостей приложения...'
+        Write-Host 'Установка зависимостей приложения (один раз для этой версии requirements.txt)...'
         Invoke-Python -Arguments @('-m', 'pip', 'install', '--disable-pip-version-check', '--prefer-binary', '--target', $script:Packages, '-r', $script:Requirements) | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'Не удалось установить зависимости. Проверьте Интернет и повторите запуск.' }
-        Set-Content -LiteralPath $script:DependencyStamp -Value $script:PythonVersion -Encoding ascii
+        if ($LASTEXITCODE -ne 0) {
+            # Недоустановленный каталог не должен считаться готовым при следующем запуске.
+            Remove-Item -LiteralPath $script:Packages -Recurse -Force -ErrorAction SilentlyContinue
+            throw 'Не удалось установить зависимости. Проверьте Интернет и повторите запуск.'
+        }
+        Set-Content -LiteralPath $script:DependencyStamp -Value $script:StampValue -Encoding ascii
     }
 
+    # Отметка ставится после успешной установки; при смене версии Playwright браузер докачивается.
+    $browserStamp = Join-Path $script:BrowserPath ("chromium-$(Get-PlaywrightVersion).stamp")
     $browser = Get-ChildItem -LiteralPath $script:BrowserPath -Directory -Filter 'chromium-*' -ErrorAction SilentlyContinue | Select-Object -First 1
-    $chromiumInstalled = -not $script:PackageMode -and
-        (Test-Path -LiteralPath $script:BrowserStamp) -and [bool]$browser
-    if (-not $chromiumInstalled) {
+    $chromiumInstalled = -not $script:PackageMode -and (Test-Path -LiteralPath $browserStamp) -and [bool]$browser
+    if ($chromiumInstalled) {
+        Write-Host 'Браузер Chromium уже установлен.'
+    }
+    else {
         Write-Host 'Установка браузера Chromium для работы с MAX...'
         Invoke-Python -Arguments @('-m', 'playwright', 'install', 'chromium') | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'Не удалось загрузить Chromium. Проверьте Интернет и повторите запуск.' }
         if (-not $script:PackageMode) {
-            Set-Content -LiteralPath $script:BrowserStamp -Value 'installed' -Encoding ascii
+            Set-Content -LiteralPath $browserStamp -Value 'installed' -Encoding ascii
         }
+    }
+    Remove-StaleRuntimes
+}
+
+function Get-Health {
+    try {
+        return Invoke-RestMethod -Uri 'http://127.0.0.1:8000/api/health' -TimeoutSec 2
+    }
+    catch {
+        return $null
     }
 }
 
+function Test-SameRoot {
+    param([string]$Other)
+    if (-not $Other) { return $false }
+    $mine = [System.IO.Path]::GetFullPath($script:Root).TrimEnd('\')
+    $theirs = [System.IO.Path]::GetFullPath($Other).TrimEnd('\')
+    return $mine -ieq $theirs
+}
+
+function Stop-OtherBackend {
+    # Порт 8000 занят копией приложения из другой папки (старая версия): останавливаем её,
+    # иначе run.bat открыл бы старый интерфейс, а новая версия не запустилась.
+    $backendPid = $null
+    if (Test-Path -LiteralPath $script:PidFile) {
+        $backendPid = (Get-Content -LiteralPath $script:PidFile -Raw).Trim()
+    }
+    $process = $null
+    if ($backendPid -match '^\d+$') {
+        $process = Get-CimInstance Win32_Process -Filter "ProcessId=$backendPid" -ErrorAction SilentlyContinue
+    }
+    if (-not $process -or $process.CommandLine -notlike '*uvicorn app.main:app*') {
+        throw 'На порту 8000 уже работает другая копия приложения. Остановите её (stop.bat в её папке или закройте окно backend) и повторите запуск.'
+    }
+    Write-Host 'Останавливаю запущенную копию приложения из другой папки...'
+    & taskkill.exe /PID $backendPid /T /F | Out-Null
+    Remove-Item -LiteralPath $script:PidFile -Force -ErrorAction SilentlyContinue
+    for ($attempt = 0; $attempt -lt 10; $attempt++) {
+        if (-not (Get-Health)) { return }
+        Start-Sleep -Seconds 1
+    }
+    throw 'Не удалось остановить предыдущую копию приложения на порту 8000.'
+}
+
 function Start-Application {
-    $healthUrl = 'http://127.0.0.1:8000/api/health'
     $appUrl = 'http://127.0.0.1:8000/'
-    try {
-        $response = Invoke-WebRequest -UseBasicParsing -Uri $healthUrl -TimeoutSec 2
-        if ($response.StatusCode -eq 200) {
+    $health = Get-Health
+    if ($health) {
+        $runningRoot = ''
+        if ($health.PSObject.Properties['root']) { $runningRoot = [string]$health.root }
+        if (Test-SameRoot $runningRoot) {
             Write-Host 'Приложение уже запущено: http://127.0.0.1:8000'
             Start-Process $appUrl
             return
         }
-    }
-    catch {
-        # No server is running on the application port yet.
+        Stop-OtherBackend
     }
 
     Write-Host 'Запуск локального приложения...'
     $startArguments = @($script:PythonPrefix) + @('-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8000')
     # Backend запускается в собственном окне консоли, чтобы сообщения о работе
     # (запуск, запросы, ошибки) были видны оператору; полный журнал также пишется
-    # в backend\logs\session.log. При аварийном завершении окно остаётся открытым.
+    # в session.log каталога данных. При аварийном завершении окно остаётся открытым.
     $quotedPython = '"' + $script:Python + '"'
     $commandLine = '/d /s /c "title MAX Rassylki - backend && ' + $quotedPython +
         ' ' + ($startArguments -join ' ') + ' || pause"'
@@ -167,27 +278,21 @@ function Start-Application {
         -WorkingDirectory (Join-Path $script:Root 'backend') `
         -PassThru
 
+    $logHint = Join-Path $script:DataDir 'logs\session.log'
     for ($attempt = 0; $attempt -lt 45; $attempt++) {
         Start-Sleep -Seconds 1
         if ($process.HasExited) {
-            throw "Backend завершился во время запуска (код $($process.ExitCode)). Подробности в окне backend и в backend\logs\session.log."
+            throw "Backend завершился во время запуска (код $($process.ExitCode)). Подробности в окне backend и в $logHint."
         }
-        try {
-            $response = Invoke-WebRequest -UseBasicParsing -Uri $healthUrl -TimeoutSec 2
-            if ($response.StatusCode -eq 200) {
-                Set-Content -LiteralPath (Join-Path $script:Root '.runtime\backend.pid') `
-                    -Value $process.Id -Encoding ascii
-                Start-Process $appUrl
-                return
-            }
-        }
-        catch {
-            # The server is still starting.
+        if (Get-Health) {
+            Set-Content -LiteralPath $script:PidFile -Value $process.Id -Encoding ascii
+            Start-Process $appUrl
+            return
         }
     }
 
     & taskkill.exe /PID $process.Id /T /F | Out-Null
-    throw 'Backend не ответил за 45 секунд. Смотрите сообщения в окне backend и в backend\logs\session.log.'
+    throw "Backend не ответил за 45 секунд. Смотрите сообщения в окне backend и в $logHint."
 }
 
 try {
@@ -199,4 +304,3 @@ catch {
     Write-Error $_
     exit 1
 }
-

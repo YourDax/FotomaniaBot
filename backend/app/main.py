@@ -20,14 +20,13 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 
 from . import max_browser, worker
-from .db import BASE_DIR, DATABASE_URL, engine
-from .migrations import apply_migrations
+from .data_dir import APP_ROOT, DATA_DIR, LOG_DIR
+from .db import DATABASE_URL, engine
+from .migrations import apply_migrations, backup_before_upgrade
 from .models import Base
 from .routers import campaigns, clients, imports, reports, schools, tasks
 
 log = logging.getLogger("fotomaniabot")
-LOG_DIR = BASE_DIR / "logs"
-LOG_DIR.mkdir(exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 if not any(isinstance(handler, logging.FileHandler) for handler in log.handlers):
     file_handler = RotatingFileHandler(
@@ -59,6 +58,9 @@ def _purge_old_snapshots() -> None:
 
 def init_db() -> None:
     """Create missing tables and apply migrations. Idempotent and safe to repeat."""
+    backup = backup_before_upgrade(engine)
+    if backup:
+        log.warning("Схема базы будет обновлена; резервная копия: %s", backup)
     Base.metadata.create_all(engine)
     apply_migrations(engine)
 
@@ -68,6 +70,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     init_db()
     _purge_old_snapshots()
     worker.start_worker()
+    log.info("Каталог данных: %s", DATA_DIR)
     log.info("База данных: %s", DATABASE_URL)
     log.info("Журнал сессии: %s", LOG_DIR / "session.log")
     log.info("Приложение запущено; подготовка сообщений в MAX доступна через CDP")
@@ -149,6 +152,7 @@ def health() -> dict[str, Any]:
         "worker": worker.is_alive(),
         "integration": "browser_cdp",
         "max": max_browser.status(),
+        "root": str(APP_ROOT),  # run.bat по нему отличает «свою» копию от запущенной другой версии
         "mode": "manual",
     }
 

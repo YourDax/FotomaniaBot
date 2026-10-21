@@ -7,7 +7,7 @@ import os
 import time
 from typing import Any
 
-from ..db import BASE_DIR
+from ..data_dir import LOG_DIR
 
 log = logging.getLogger("fotomaniabot.max_browser")
 
@@ -114,9 +114,7 @@ def _log_page_state(page: Any, stage: str) -> None:
             input_data,
         )
         if os.getenv("MAX_SAVE_DOM_LOG", "0") == "1":
-            log_dir = BASE_DIR / "logs"
-            log_dir.mkdir(exist_ok=True)
-            snapshot = log_dir / f"max-{int(time.time())}-{stage}.html"
+            snapshot = LOG_DIR / f"max-{int(time.time())}-{stage}.html"
             snapshot.write_text(page.content(), encoding="utf-8")
             log.info("MAX DOM snapshot saved path=%s", snapshot)
     except Exception:
