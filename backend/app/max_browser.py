@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 import time
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -323,8 +324,57 @@ def _read_editor_text(editor: Any) -> str:
     tag_name = editor.evaluate("(node) => node.tagName.toLowerCase()")
     if tag_name in {"input", "textarea", "select"}:
         return editor.input_value()
+    # MAX stores each emoji as <span data-lexical-emoji="🌷"> with an empty placeholder,
+    # so innerText/textContent miss it. Read the character from the attribute instead.
     return editor.evaluate(
-        "(node) => (node.innerText || node.textContent || '').replace(/\\r\\n/g, '\\n')"
+        "(node) => { const copy = node.cloneNode(true); "
+        "copy.querySelectorAll('[data-lexical-emoji]').forEach((el) => el.replaceWith("
+        "document.createTextNode(el.getAttribute('data-lexical-emoji') || ''))); "
+        "copy.querySelectorAll('img').forEach((img) => img.replaceWith("
+        "document.createTextNode(img.alt || ''))); "
+        "return (copy.innerText || copy.textContent || '').replace(/\\r\\n/g, '\\n'); }"
+    )
+
+
+_INVISIBLE_EMOJI_PARTS = frozenset(
+    {"\u200b", "\u200c", "\u200d", "\u2060", "\ufeff", "\ufe0e", "\ufe0f"}
+)
+_SKIN_TONE_RANGE = ("\U0001f3fb", "\U0001f3ff")
+
+
+def _comparable_message_text(value: str) -> str:
+    """Form of a message used only for the post-insert check.
+
+    Contenteditable editors (MAX) collapse blank lines, strip trailing spaces and may add
+    or drop invisible emoji parts (variation selectors, zero-width joiners, skin-tone
+    modifiers). All whitespace and those invisible parts are ignored; every visible
+    character, emoji included, must match in order.
+    """
+    text = unicodedata.normalize("NFC", value)
+    kept = [
+        char
+        for char in text
+        if not char.isspace()
+        and char not in _INVISIBLE_EMOJI_PARTS
+        and not (_SKIN_TONE_RANGE[0] <= char <= _SKIN_TONE_RANGE[1])
+    ]
+    return "".join(kept)
+
+
+def _mismatch_details(expected: str, actual: str) -> str:
+    """Diagnostic for the log: first differing position with the nearby characters."""
+    limit = min(len(expected), len(actual))
+    index = next((i for i in range(limit) if expected[i] != actual[i]), limit)
+    start = max(0, index - 12)
+    end = index + 12
+
+    def char_name(text: str) -> str:
+        return unicodedata.name(text[index], "UNKNOWN") if index < len(text) else "конец строки"
+
+    return (
+        f"позиция={index} "
+        f"ожидалось={ascii(expected[start:end])} [{char_name(expected)}] "
+        f"получено={ascii(actual[start:end])} [{char_name(actual)}]"
     )
 
 
@@ -344,15 +394,18 @@ def _insert_and_verify_message(page: Any, editor: Any, message: str) -> str:
     actual = ""
     while time.monotonic() < deadline:
         actual = _read_editor_text(editor)
-        if actual == message:
+        if _comparable_message_text(actual) == _comparable_message_text(message):
             log.info("MAX: текст вставлен и проверен")
             return actual
         time.sleep(0.1)
     log.warning(
         "MAX: текст вставлен, но проверка не совпала (ожидалось_символов=%d, "
-        "получено_символов=%d)",
+        "получено_символов=%d) %s",
         len(message),
         len(actual),
+        _mismatch_details(
+            _comparable_message_text(message), _comparable_message_text(actual)
+        ),
     )
     raise MaxBrowserError(
         "MAX открыл чат, но текст в поле сообщения не совпал с подготовленным."
