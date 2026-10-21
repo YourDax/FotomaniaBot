@@ -33,6 +33,9 @@ export const DONE_STATUSES = ['SENT', 'FAILED', 'CANCELLED'];
 export const BAD_STATUSES = ['FAILED', 'CANCELLED', 'CONTACT_NOT_FOUND', 'MAX_ERROR'];
 export const EDITABLE_TASK_STATUSES = ['PENDING', 'REQUIRES_REVIEW', 'CONTACT_NOT_FOUND', 'MAX_ERROR'];
 
+// Служебный фильтр заданий: всё, что ещё не доведено до итогового статуса.
+export const TODO_FILTER = '_todo';
+
 export const statusName = (code) => STATUS_NAMES[code] || code || '—';
 export const fmtDateTime = (value) => {
   if (!value) return '—';
@@ -72,8 +75,8 @@ export const S = {
   busy: false,
   prefs: { theme: 'light', refreshMs: 5000, pageSize: 50, collapsed: [] },
   collapsed: new Set(),
-  contactsUi: { q: '', school: '', klass: '', role: '', optedOut: '', page: 1, selected: new Set() },
-  campaignsUi: { q: '', status: '', page: 1, pageSize: 25, selected: new Set() },
+  contactsUi: { q: '', school: '', klass: '', role: '', optedOut: '', sort: '', dir: 'asc', page: 1, selected: new Set() },
+  campaignsUi: { q: '', status: '', page: 1, pageSize: 25, selected: new Set(), formStep: 1 },
   tasksUi: { campaignId: null, q: '', role: '', sort: 'id', page: 1, statusFilter: '', selectedId: null, updatedAt: null, cursor: null, cursorCampaignId: null, campaignSignature: '' },
   recipients: { selected: new Set(), query: '' },
   importUi: { headers: [], rows: [], mapping: {}, showAll: false, step: 1, fileName: '' },
@@ -110,7 +113,7 @@ export function explain(status, data) {
   if (status === 409) return 'Конфликт данных: такая запись уже существует.';
   if (status === 413) return 'Файл слишком большой (лимит 10 МБ).';
   if (status === 422) return 'Проверьте заполнение полей.';
-  if (status >= 500) return 'Сервер не смог выполнить операцию. Подробности в журнале backend/logs/session.log.';
+  if (status >= 500) return 'Сервер не смог выполнить операцию. Подробности в журнале session.log (папка logs в каталоге данных).';
   return 'Операция не выполнена.';
 }
 

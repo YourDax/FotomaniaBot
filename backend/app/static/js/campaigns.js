@@ -3,7 +3,7 @@ import { schoolNameById } from './contacts.js';
 import { $, api, DONE_STATUSES, EDITABLE_TASK_STATUSES, esc, fmtDateTime, plural, qa, S, statusName } from './core.js';
 import { renderDashboard } from './dashboard.js';
 import { go } from './router.js';
-import { loadSchools, schoolKey, updateNavCounts } from './schools.js';
+import { loadSchools, schoolKey, updateCollapseToggles, updateNavCounts } from './schools.js';
 import { refreshTasks } from './tasks.js';
 import { confirmAction, openModal, promptAction, toast } from './ui.js';
 
@@ -27,7 +27,8 @@ export function pickerContacts() {
 export function renderPicker() {
   const rows = pickerContacts();
   if (!S.schools.length) {
-    $('campaignPicker').innerHTML = '<p class="muted" style="padding:10px">Школ пока нет. Добавьте школу и контакты на вкладке «Школы и классы» или импортируйте таблицу.</p>';
+    $('campaignPicker').innerHTML = '<p class="muted pad-10">Школ пока нет. Добавьте школу и контакты на вкладке «Школы и классы» или импортируйте таблицу.</p>';
+    updateCollapseToggles();
     return;
   }
   const grouped = new Map();
@@ -38,7 +39,8 @@ export function renderPicker() {
     classes.get(row.class_id).push(row);
   });
   if (!grouped.size) {
-    $('campaignPicker').innerHTML = '<p class="muted" style="padding:10px">По запросу получатели не найдены.</p>';
+    $('campaignPicker').innerHTML = '<p class="muted pad-10">По запросу получатели не найдены.</p>';
+    updateCollapseToggles();
     return;
   }
   const query = ($('recipientSearch').value || '').trim().toLowerCase();
@@ -65,7 +67,7 @@ export function renderPicker() {
         <div class="class-list collapse-body" id="pickBody${schoolId}"${collapsed ? ' hidden' : ''}>
           ${Array.from(classes.entries()).map(([classId, contacts]) => `
             <div>
-              <div class="muted" style="margin:4px 0">${esc(contacts[0].klass || 'без класса')}</div>
+              <div class="muted my-4">${esc(contacts[0].klass || 'без класса')}</div>
               ${contacts.map((contact) => `
                 <label class="item">
                   <input type="checkbox" data-pick-contact="${contact.id}" ${S.recipients.selected.has(contact.id) ? 'checked' : ''} ${contact.opted_out ? 'disabled' : ''}>
@@ -77,6 +79,7 @@ export function renderPicker() {
       </div>`;
   }).join('');
 
+  updateCollapseToggles();
   qa('[data-pick-contact]', $('campaignPicker')).forEach((input) => {
     input.addEventListener('change', () => {
       const id = Number(input.dataset.pickContact);
@@ -152,7 +155,100 @@ export function previewCampaign() {
     })
     .join('\n\n');
   $('campaignPreview').textContent = `Кому: ${first.name} (${ROLE_LABEL[first.role] || first.role})\n\n${rendered}`;
-  $('campaignPreviewWrap').classList.remove('hidden');
+}
+
+// --- Форма новой рассылки: три шага ------------------------------------------
+
+const CAMPAIGN_STEPS = 3;
+
+export function openCampaignForm() {
+  $('campaignForm').classList.remove('hidden');
+  setCampaignStep(1, { force: true });
+  $('campaignForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  $('campaignName').focus({ preventScroll: true });
+}
+
+export function closeCampaignForm() {
+  $('campaignForm').classList.add('hidden');
+  $('campaignName').value = '';
+  $('campaignDescription').value = '';
+  S.messageSets.KR.reset();
+  S.messageSets.RK.reset();
+  S.recipients.selected.clear();
+  renderPicker();
+}
+
+// Возвращает текст проблемы на шаге или null, если шаг заполнен корректно.
+export function stepProblem(step) {
+  if (step === 1) {
+    if (!($('campaignName').value || '').trim()) return 'Укажите название рассылки';
+    const kr = S.messageSets.KR.read();
+    const rk = S.messageSets.RK.read();
+    if (kr.error || rk.error) return kr.error || rk.error;
+    if (!kr.values.length && !rk.values.length) return 'Заполните текст хотя бы для одной роли';
+  }
+  if (step === 2 && !recipientStats().total) return 'Выберите хотя бы одного получателя';
+  return null;
+}
+
+export function setCampaignStep(target, { force = false } = {}) {
+  const wanted = Math.min(CAMPAIGN_STEPS, Math.max(1, target));
+  if (!force) {
+    // Вперёд можно только через заполненные шаги; назад — всегда.
+    for (let step = S.campaignsUi.formStep; step < wanted; step += 1) {
+      const problem = stepProblem(step);
+      if (problem) {
+        toast(problem, 'warn');
+        return;
+      }
+    }
+  }
+  S.campaignsUi.formStep = wanted;
+  qa('[data-cpanel]', $('campaignForm')).forEach((panel) => {
+    panel.hidden = Number(panel.dataset.cpanel) !== wanted;
+  });
+  qa('[data-cstep]', $('campaignStepper')).forEach((button) => {
+    const number = Number(button.dataset.cstep);
+    button.classList.toggle('active', number === wanted);
+    button.classList.toggle('done', number < wanted);
+    if (number === wanted) button.setAttribute('aria-current', 'step');
+    else button.removeAttribute('aria-current');
+  });
+  if (wanted === 3) renderCampaignSummary();
+}
+
+export function renderCampaignSummary() {
+  const stats = recipientStats();
+  const kr = S.messageSets.KR.read().values.length;
+  const rk = S.messageSets.RK.read().values.length;
+  const schools = new Set(stats.all.filter((contact) => S.recipients.selected.has(contact.id)).map((contact) => contact.school_id));
+  $('campaignSummary').innerHTML = `
+    <dt>Название</dt><dd>${esc(($('campaignName').value || '').trim())}</dd>
+    <dt>Сообщения</dt><dd>КР: ${kr || 'нет'} · РК: ${rk || 'нет'}</dd>
+    <dt>Получатели</dt><dd>${stats.total} (КР: ${stats.kr} · РК: ${stats.rk}${stats.skipped ? ` · отписавшихся: ${stats.skipped}` : ''})</dd>
+    <dt>Школ</dt><dd>${schools.size}</dd>`;
+  previewCampaign();
+}
+
+// Новая рассылка на основе существующей: те же тексты и получатели (кроме удалённых и отписавшихся).
+export async function duplicateCampaign(id) {
+  const campaign = S.campaigns.find((item) => item.id === Number(id));
+  if (!campaign) return;
+  const tasks = await api(`/campaigns/${campaign.id}/tasks`);
+  if (!S.schools.length) await loadSchools();
+  const available = new Set(recipientStats().all.filter((contact) => !contact.opted_out).map((contact) => contact.id));
+  const ids = tasks.map((task) => task.client_id).filter((clientId) => available.has(clientId));
+  go('campaigns');
+  $('campaignName').value = `Копия — ${campaign.name}`.slice(0, 200);
+  $('campaignDescription').value = campaign.description || '';
+  S.messageSets.KR.set(campaign.messages_kr);
+  S.messageSets.RK.set(campaign.messages_rk);
+  S.recipients.selected = new Set(ids);
+  renderPicker();
+  openCampaignForm();
+  const lost = tasks.length - ids.length;
+  toast(`Форма заполнена из рассылки «${campaign.name}». Получателей: ${ids.length}` +
+    (lost ? `, пропущено (удалены или отписались): ${lost}` : ''), lost ? 'warn' : 'ok');
 }
 
 // --- Рассылки: список, создание, действия -----------------------------------
@@ -170,8 +266,8 @@ export function campaignProgressCell(campaign) {
   const stats = campaignProgress(campaign);
   const tone = stats.percent === 100 ? 'ok' : stats.counts.FAILED ? 'err' : '';
   return `
-    <div class="row" style="gap:8px">
-      <div class="grow" style="min-width:110px">
+    <div class="row gap-8">
+      <div class="grow minw-110">
         <div class="progress ${tone}"><span style="width:${stats.percent}%"></span></div>
       </div>
       <span class="muted">${stats.done} / ${stats.total}</span>
@@ -213,26 +309,27 @@ export function renderCampaigns() {
   $('campaignRows').innerHTML = visible.length
     ? visible.map((campaign) => `
       <tr>
-        <td><input type="checkbox" class="campaign-check" data-id="${campaign.id}" ${ui.selected.has(campaign.id) ? 'checked' : ''} aria-label="Выбрать рассылку"></td>
-        <td>
+        <td data-label=""><input type="checkbox" class="campaign-check" data-id="${campaign.id}" ${ui.selected.has(campaign.id) ? 'checked' : ''} aria-label="Выбрать рассылку"></td>
+        <td data-label="Рассылка">
           <b>${esc(campaign.name)}</b>
           ${campaign.description ? `<span class="muted">${esc(campaign.description)}</span>` : ''}
           <span class="badge ${campaign.status === 'COMPLETED' ? 'ok' : campaign.status === 'STOPPED' ? 'err' : 'mute'}">${esc(statusName(campaign.status))}</span>
         </td>
-        <td>${campaign.school_id ? esc(schoolNameById(campaign.school_id)) : '<span class="muted">все школы</span>'}</td>
-        <td>${esc(fmtDateTime(campaign.created_at))}</td>
-        <td>${campaignProgressCell(campaign)}</td>
-        <td>
-          <div class="row" style="gap:6px">
+        <td data-label="Школа">${campaign.school_id ? esc(schoolNameById(campaign.school_id)) : '<span class="muted">все школы</span>'}</td>
+        <td data-label="Создана">${esc(fmtDateTime(campaign.created_at))}</td>
+        <td data-label="Прогресс">${campaignProgressCell(campaign)}</td>
+        <td data-label="Действия">
+          <div class="row gap-6">
             <button type="button" class="btn small ghost" data-action="campaign-open" data-id="${campaign.id}">Задания</button>
             ${campaign.status === 'DRAFT' ? `<button type="button" class="btn small primary" data-action="campaign-start" data-id="${campaign.id}">Запустить</button>` : ''}
             ${['RUNNING', 'WAITING_REVIEW'].includes(campaign.status) ? `<button type="button" class="btn small ghost" data-action="campaign-stop" data-id="${campaign.id}">Остановить</button>` : ''}
+            <button type="button" class="btn small ghost" data-action="campaign-duplicate" data-id="${campaign.id}" title="Создать новую рассылку с теми же текстами и получателями">Дублировать</button>
             <button type="button" class="btn small ghost" data-action="campaign-export" data-id="${campaign.id}">CSV</button>
             <button type="button" class="btn small danger" data-action="campaign-delete" data-id="${campaign.id}">Удалить</button>
           </div>
         </td>
       </tr>`).join('')
-    : '<tr><td colspan="6" class="empty">Рассылок пока нет. Создайте первую рассылку в форме выше.</td></tr>';
+    : '<tr><td colspan="6" class="empty">Рассылок пока нет. Нажмите «Новая рассылка», чтобы создать первую.</td></tr>';
 
   qa('.campaign-check', $('campaignRows')).forEach((input) => {
     input.addEventListener('change', () => {
@@ -260,7 +357,7 @@ export function renderCampaigns() {
 export function renderRecentCampaigns() {
   const recent = S.campaigns.slice(0, 5);
   $('recentCampaigns').innerHTML = recent.length
-    ? `<div class="table-wrap" style="max-height:none">
+    ? `<div class="table-wrap table-flat">
          <table>
            <thead><tr><th>Рассылка</th><th>Статус</th><th>Прогресс</th><th></th></tr></thead>
            <tbody>${recent.map((campaign) => `
@@ -318,12 +415,7 @@ export async function createCampaign() {
     });
     toast(`Рассылка создана. Получателей: ${created.task_count}`);
     await loadMessageTemplates().catch(() => {});
-    $('campaignName').value = '';
-    $('campaignDescription').value = '';
-    S.messageSets.KR.reset();
-    S.messageSets.RK.reset();
-    $('campaignPreviewWrap').classList.add('hidden');
-    S.recipients.selected.clear();
+    closeCampaignForm();
     await loadSchools();
     await loadCampaigns();
     go('tasks', { campaignId: created.id });
@@ -337,7 +429,7 @@ export async function startCampaign(id) {
   const campaign = S.campaigns.find((item) => item.id === Number(id));
   const accepted = await confirmAction(
     'Запустить рассылку',
-    'Кампания перейдёт в работу: приложение начнёт готовить задания и переведёт их в статус ожидания оператора. Автоматическая отправка не выполняется.',
+    `Рассылка «${campaign ? campaign.name : id}» перейдёт в работу: заданий ${campaign ? campaign.task_count : '—'} будут переведены в статус ожидания оператора. Автоматическая отправка не выполняется.`,
     { confirmText: 'Запустить', danger: false },
   );
   if (!accepted) return;
@@ -347,8 +439,16 @@ export async function startCampaign(id) {
 }
 
 export async function stopCampaign(id) {
+  const campaign = S.campaigns.find((item) => item.id === Number(id));
+  const progress = campaign ? campaignProgress(campaign) : null;
   const values = await promptAction('Остановить рассылку', [
-    { id: 'reason', label: 'Причина остановки', value: 'Остановлено оператором', required: true },
+    {
+      id: 'reason',
+      label: 'Причина остановки',
+      value: 'Остановлено оператором',
+      required: true,
+      hint: progress ? `Необработанных заданий: ${progress.total - progress.done}. Отправленные задания не изменятся.` : '',
+    },
   ], 'Остановить');
   if (values === null) return;
   await api(`/campaigns/${id}/stop?reason=${encodeURIComponent(values.reason)}`, { method: 'POST' });
@@ -361,7 +461,7 @@ export async function deleteCampaign(id) {
   const campaign = S.campaigns.find((item) => item.id === Number(id));
   const accepted = await confirmAction(
     'Удалить рассылку',
-    `Рассылка «${campaign ? campaign.name : id}» и все её задания будут удалены. Действие необратимо.`,
+    `Рассылка «${campaign ? campaign.name : id}» и все её задания${campaign ? ` (${campaign.task_count})` : ''} будут удалены. Действие необратимо.`,
     { confirmText: 'Удалить рассылку' },
   );
   if (!accepted) return;
@@ -503,6 +603,12 @@ export function createMessageSet(host, role, initial) {
       state.values = state.values.map(() => '');
       render();
     },
+    set(values) {
+      const next = (Array.isArray(values) && values.length ? values : ['']).slice(0, MAX_MESSAGES);
+      state.count = next.length;
+      state.values = Array.from({ length: MAX_MESSAGES }, (_, index) => next[index] || '');
+      render();
+    },
     refreshTemplates() {
       host.querySelectorAll('[data-msg-tpl]').forEach((select) => {
         select.innerHTML = templateOptions(role);
@@ -527,8 +633,8 @@ export function openCampaignMessagesDialog() {
   openModal({
     title: 'Изменить тексты рассылки',
     body: `
-      <p class="muted" style="margin:0 0 12px">Изменения применятся ко всем заданиям, которые ещё не обработаны. Отправленные, неуспешные и отменённые задания не меняются. Персональные правки отдельных получателей будут перезаписаны, а отметки «черновик готов» сохранятся только у неизменённых сообщений.</p>
-      <div class="msgset" id="editSetKR" style="margin-bottom:14px"></div>
+      <p class="muted m-0 mb-12">Изменения применятся ко всем заданиям, которые ещё не обработаны. Отправленные, неуспешные и отменённые задания не меняются. Персональные правки отдельных получателей будут перезаписаны, а отметки «черновик готов» сохранятся только у неизменённых сообщений.</p>
+      <div class="msgset mb-14" id="editSetKR"></div>
       <div class="msgset" id="editSetRK"></div>`,
     confirmText: 'Применить ко всем',
     onReady: () => {
@@ -569,7 +675,7 @@ export function openTaskMessageDialog(taskId, messageNo = 1) {
   openModal({
     title: `Текст${(task.messages || []).length > 1 ? ` сообщения ${messageNo}` : ''} для ${task.client}`,
     body: `
-      <p class="muted" style="margin:0 0 10px">Правка касается только этого получателя. Черновик в MAX придётся подготовить заново.</p>
+      <p class="muted m-0 mb-10">Правка касается только этого получателя. Черновик в MAX придётся подготовить заново.</p>
       <div class="field">
         <span>Текст сообщения <span class="req">*</span></span>
         <textarea id="editTaskMessage" maxlength="4000">${esc(entry ? entry.text : (task.message || ''))}</textarea>

@@ -148,6 +148,7 @@ def health() -> dict[str, Any]:
         "status": "ok",
         "worker": worker.is_alive(),
         "integration": "browser_cdp",
+        "max": max_browser.status(),
         "mode": "manual",
     }
 

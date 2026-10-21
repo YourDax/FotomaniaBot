@@ -35,6 +35,7 @@ def test_health():
     response = client.get("/api/health")
     assert response.status_code == 200
     assert response.json()["integration"] == "browser_cdp"
+    assert response.json()["max"] in {"ready", "no_tab", "offline"}
 
 
 def test_school_and_class_crud():

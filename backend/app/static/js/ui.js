@@ -94,7 +94,7 @@ export const confirmAction = (title, text, options = {}) =>
   new Promise((resolve) => {
     openModal({
       title,
-      body: `<p class="muted" style="margin:0">${esc(text)}</p>`,
+      body: `<p class="muted m-0">${esc(text)}</p>`,
       confirmText: options.confirmText || 'Подтвердить',
       cancelText: options.cancelText || 'Отмена',
       danger: options.danger !== false,
@@ -117,7 +117,7 @@ export const promptAction = (title, fields, confirmText = 'Сохранить') 
       return `<input id="${field.id}" type="${field.type || 'text'}" value="${esc(field.value || '')}" placeholder="${esc(field.placeholder || '')}">`;
     };
     const body = fields.map((field) => `
-      <div class="field" style="margin-bottom:10px">
+      <div class="field mb-10">
         <span>${esc(field.label)}${field.required ? ' <span class="req">*</span>' : ''}</span>
         ${control(field)}
         ${field.hint ? `<small class="muted">${esc(field.hint)}</small>` : ''}

@@ -37,6 +37,22 @@ def cdp_url() -> str:
     return os.getenv("MAX_CDP_URL", DEFAULT_CDP_URL).strip()
 
 
+def status() -> str:
+    """Лёгкая проверка без Playwright: «ready», «no_tab» (нет вкладки MAX) или «offline»."""
+    import json
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(f"{cdp_url().rstrip('/')}/json/list", timeout=1) as response:
+            tabs = json.load(response)
+    except Exception:
+        return "offline"
+    has_tab = any(
+        tab.get("type") == "page" and "max" in str(tab.get("url", "")).casefold() for tab in tabs
+    )
+    return "ready" if has_tab else "no_tab"
+
+
 def _ensure_cdp_endpoint(playwright: Any, cdp_url: str) -> None:
     """Start a persistent, non-authenticating Chromium when CDP is absent."""
     import urllib.request

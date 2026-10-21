@@ -1,6 +1,6 @@
 /* Задания рассылки: таблица, карточка, действия в MAX, автообновление. */
 import { campaignProgress, loadCampaigns } from './campaigns.js';
-import { $, api, BAD_STATUSES, DONE_STATUSES, EDITABLE_TASK_STATUSES, esc, fmtDateTime, fmtTime, plural, qa, S, statusName, TASK_STATUSES } from './core.js';
+import { $, api, BAD_STATUSES, DONE_STATUSES, EDITABLE_TASK_STATUSES, esc, fmtDateTime, fmtTime, plural, qa, S, statusName, TASK_STATUSES, TODO_FILTER } from './core.js';
 import { go } from './router.js';
 import { loadSchools } from './schools.js';
 import { confirmAction, toast } from './ui.js';
@@ -56,7 +56,9 @@ export function taskFiltered() {
   const ui = S.tasksUi;
   const query = ui.q.trim().toLowerCase();
   let rows = S.tasks.filter((task) => {
-    if (ui.statusFilter && task.status !== ui.statusFilter) return false;
+    if (ui.statusFilter === TODO_FILTER) {
+      if (DONE_STATUSES.includes(task.status)) return false;
+    } else if (ui.statusFilter && task.status !== ui.statusFilter) return false;
     if (ui.role && task.recipient_role !== ui.role) return false;
     if (query) {
       const haystack = `${task.client} ${task.phone || ''} ${task.school || ''} ${task.class_name || ''}`.toLowerCase();
@@ -88,14 +90,23 @@ export function renderTaskHeader() {
   renderBulkMessageSelect();
   $('taskUpdatedAt').textContent = S.tasksUi.updatedAt ? fmtTime(S.tasksUi.updatedAt) : '—';
   $('taskExportLink').href = `/api/reports/${S.tasksUi.campaignId}/export`;
-  $('taskStopBtn').classList.toggle('hidden', !['RUNNING', 'WAITING_REVIEW'].includes(campaign.status));
-  $('taskProgress').querySelector('span').style.width = `${stats.percent}%`;
-  $('taskProgress').className = 'progress ' + (stats.percent === 100 ? 'ok' : (stats.counts.FAILED || 0) > 0 ? 'err' : '');
-  $('taskProgressText').textContent = `${stats.done} из ${stats.total} подтверждено`;
+  $('taskStopGroup').classList.toggle('hidden', !['RUNNING', 'WAITING_REVIEW'].includes(campaign.status));
+
+  // Две части полосы: подтверждённые задания и задания с готовым черновиком, но без результата.
+  const drafted = S.tasks.filter((task) => !DONE_STATUSES.includes(task.status)
+    && (task.messages || []).length > 0 && task.messages.every((message) => message.prepared_at)).length;
+  const donePercent = stats.total ? (stats.done / stats.total) * 100 : 0;
+  const draftPercent = stats.total ? (drafted / stats.total) * 100 : 0;
+  const progress = $('taskProgress');
+  progress.querySelector('.done').style.width = `${donePercent}%`;
+  progress.querySelector('.prep').style.width = `${draftPercent}%`;
+  progress.setAttribute('aria-valuenow', String(Math.round(donePercent)));
+  $('taskProgressText').textContent = `${stats.done} из ${stats.total} подтверждено` +
+    (drafted ? ` · черновики готовы: ${drafted}` : '');
 
   const counts = campaign.status_counts || {};
   const total = campaign.task_count || 0;
-  const chips = [['', 'Все', total]]
+  const chips = [['', 'Все', total], [TODO_FILTER, 'Нужно обработать', total - stats.done]]
     .concat(TASK_STATUSES
       .filter((code) => counts[code])
       .map((code) => [code, statusName(code), counts[code]]));
@@ -141,6 +152,19 @@ export function prepareButtons(task, className, only) {
       title="${message.prepared_at ? 'Черновик уже подготовлен; повторная подготовка заменит текст в поле ввода' : 'Вставить текст сообщения в поле ввода MAX'}">${prepareLabel(total, message)}</button>`).join('');
 }
 
+export const statusTone = (status) =>
+  (status === 'SENT' ? 'ok' : BAD_STATUSES.includes(status) ? 'err' : 'warn');
+
+// Итог одним нажатием: «Отправлено» / «Не отправлено» (и «Неизвестно» только в карточке).
+export function resultButtons(task, withUnknown = false) {
+  return `
+    <button type="button" class="btn small ok-btn" data-action="task-confirm" data-id="${task.id}" data-result="sent"
+      title="Сообщение отправлено вручную в MAX">✓ Отправлено</button>
+    <button type="button" class="btn small danger" data-action="task-confirm" data-id="${task.id}" data-result="failed"
+      title="Сообщение не удалось отправить">✕ Не отправлено</button>
+    ${withUnknown ? `<button type="button" class="btn small ghost" data-action="task-confirm" data-id="${task.id}" data-result="unknown">Неизвестно</button>` : ''}`;
+}
+
 export function paintTaskRows() {
   const ui = S.tasksUi;
   const rows = taskFiltered();
@@ -154,37 +178,35 @@ export function paintTaskRows() {
   $('taskRows').innerHTML = visible.length
     ? visible.map((task) => `
       <tr data-task-row="${task.id}" class="${ui.selectedId === task.id ? 'selected' : ''}">
-        <td>
+        <td data-label="Получатель">
           <b>${esc(task.client)}</b>
           <span class="muted">${esc(task.phone || 'телефон не указан')}</span>
         </td>
-        <td>${esc(task.school || '—')}</td>
-        <td>${esc(task.class_name || '—')}</td>
-        <td><span class="badge ${task.recipient_role === 'KR' ? 'ok' : 'mute'}">${task.recipient_role === 'KR' ? 'КР' : 'РК'}</span></td>
-        <td>
+        <td data-label="Школа">${esc(task.school || '—')}</td>
+        <td data-label="Класс">${esc(task.class_name || '—')}</td>
+        <td data-label="Роль"><span class="badge ${task.recipient_role === 'KR' ? 'ok' : 'mute'}">${task.recipient_role === 'KR' ? 'КР' : 'РК'}</span></td>
+        <td data-label="MAX">
           ${draftBadge(task)}
           ${task.status === 'CONTACT_NOT_FOUND' ? `<span class="badge err">${esc(statusName(task.status))}</span><br>` : ''}
           ${task.opened_at ? '<span class="badge mute">чат открыт</span>' : ''}
-          ${task.browser_error ? `<span class="badge err">ошибка MAX</span>` : ''}
+          ${task.browser_error ? `<span class="badge err" title="${esc(task.browser_error)}">ошибка MAX</span>` : ''}
         </td>
-        <td>
-          <select class="task-status-select" data-task-status-select="${task.id}" aria-label="Статус задания">
-            ${TASK_STATUSES.map((code) => `<option value="${code}" ${code === task.status ? 'selected' : ''}>${esc(statusName(code))}</option>`).join('')}
-          </select>
+        <td data-label="Статус">
+          <span class="badge ${statusTone(task.status)}">${esc(statusName(task.status))}</span>
           ${task.attempts ? `<span class="muted">попыток: ${task.attempts}</span>` : ''}
         </td>
-        <td>
+        <td data-label="Результат">
           ${task.operator_confirmed_at
             ? `<span class="badge ${task.operator_result === 'sent' ? 'ok' : task.operator_result === 'failed' ? 'err' : 'mute'}">${esc(statusName(task.status))}</span>`
             : '<span class="muted">не подтверждено</span>'}
         </td>
-        <td>
+        <td data-label="Действия">
           <div class="task-actions">
             ${prepareButtons(task, 'primary')}
             <button type="button" class="btn small ghost" data-action="task-rename" data-id="${task.id}" title="Имя по шаблону, фамилия очищается">Переименовать в MAX</button>
+            ${DONE_STATUSES.includes(task.status) ? '' : resultButtons(task)}
           </div>
         </td>
-
       </tr>`).join('')
     : '<tr><td colspan="8" class="empty">Заданий по текущему фильтру нет.</td></tr>';
 
@@ -192,11 +214,6 @@ export function paintTaskRows() {
     row.addEventListener('click', (event) => {
       if (event.target.closest('select, button, a')) return;
       selectTask(Number(row.dataset.taskRow));
-    });
-  });
-  qa('[data-task-status-select]', $('taskRows')).forEach((select) => {
-    select.addEventListener('change', () => {
-      updateTaskStatus(Number(select.dataset.taskStatusSelect), select.value).catch((error) => toast(error.message, 'error'));
     });
   });
 
@@ -225,7 +242,7 @@ export function messageBlocksHtml(task) {
   }
   const editable = EDITABLE_TASK_STATUSES.includes(task.status);
   const hint = messages.length > 1
-    ? `<p class="muted" style="margin:0 0 10px">Каждая подготовка заменяет текст в поле ввода чата MAX. Сначала отправьте предыдущее сообщение вручную, затем готовьте следующее.</p>`
+    ? `<p class="muted m-0 mb-10">Каждая подготовка заменяет текст в поле ввода чата MAX. Сначала отправьте предыдущее сообщение вручную, затем готовьте следующее.</p>`
     : '';
   return hint + messages.map((message) => `
     <div class="msg-block">
@@ -233,7 +250,7 @@ export function messageBlocksHtml(task) {
         <h3>${messages.length > 1 ? `Сообщение ${message.index} из ${messages.length}` : 'Текст сообщения'}</h3>
         ${message.prepared_at ? '<span class="badge ok">черновик готов</span>' : ''}
       </div>
-      <div class="task-actions" style="margin-bottom:8px">
+      <div class="task-actions mb-8">
         ${prepareButtons(task, 'primary', [message])}
         <button type="button" class="btn small ghost" data-action="task-copy" data-id="${task.id}" data-msg="${message.index}">Копировать текст</button>
         ${editable ? `<button type="button" class="btn small ghost" data-action="task-edit-message" data-id="${task.id}" data-msg="${message.index}">Изменить текст</button>` : ''}
@@ -261,12 +278,12 @@ export function renderTaskDetail() {
       <span class="spacer"></span>
       <span class="badge ${task.status === 'SENT' ? 'ok' : BAD_STATUSES.includes(task.status) ? 'err' : 'warn'}">${esc(statusName(task.status))}</span>
     </div>
-    <div class="row" style="margin-bottom:10px">
+    <div class="row mb-10">
       <button type="button" class="btn small ghost" data-action="task-open" data-id="${task.id}">Открыть чат</button>
       <button type="button" class="btn small ghost" data-action="task-rename" data-id="${task.id}" title="Имя по шаблону, фамилия очищается">Переименовать в MAX</button>
     </div>
     ${messageBlocksHtml(task)}
-    <h3 style="margin-top:14px">Данные получателя</h3>
+    <h3 class="mt-14">Данные получателя</h3>
     <dl class="kv">
       <dt>Школа</dt><dd>${esc(task.school || '—')}</dd>
       <dt>Класс</dt><dd>${esc(task.class_name || '—')}</dd>
@@ -276,7 +293,7 @@ export function renderTaskDetail() {
       <dt>Ссылка на чат</dt><dd>${task.chat_link ? `<a href="${esc(task.chat_link)}" target="_blank" rel="noopener">открыть</a>` : '—'}</dd>
       <dt>Попыток</dt><dd>${task.attempts || 0}</dd>
     </dl>
-    <h3 style="margin-top:14px">История</h3>
+    <h3 class="mt-14">История</h3>
     <dl class="kv">
       <dt>Создано</dt><dd>${esc(fmtDateTime(task.created_at))}</dd>
       <dt>Чат открыт</dt><dd>${esc(fmtDateTime(task.opened_at))}</dd>
@@ -284,20 +301,28 @@ export function renderTaskDetail() {
       <dt>Подтверждено</dt><dd>${esc(fmtDateTime(task.operator_confirmed_at))}</dd>
       <dt>Результат</dt><dd>${esc(task.operator_result || '—')}</dd>
     </dl>
-    ${task.error ? `<div class="notice warn" style="margin-top:10px">${esc(task.error)}</div>` : ''}
-    ${task.browser_error ? `<div class="notice error" style="margin-top:10px">${esc(task.browser_error)}</div>` : ''}
-    <div class="row" style="margin-top:12px">
-      <select id="detail-result">
-        <option value="sent">Отправлено</option>
-        <option value="failed">Не отправлено</option>
-        <option value="unknown">Неизвестно</option>
-      </select>
-      <button type="button" class="btn primary" data-action="task-confirm" data-id="${task.id}">Сохранить результат</button>
-    </div>
-    <div class="field" style="margin-top:10px">
+    ${task.error ? `<div class="notice warn mt-10">${esc(task.error)}</div>` : ''}
+    ${task.browser_error ? `<div class="notice error mt-10">${esc(task.browser_error)}</div>` : ''}
+    <h3 class="mt-14">Результат</h3>
+    <div class="field mt-8">
       <span>Примечание к результату (необязательно)</span>
       <textarea id="detail-note" maxlength="500" placeholder="Например: отправлено вручную, ответа нет">${esc(task.error || '')}</textarea>
-    </div>`;
+    </div>
+    <div class="task-actions mt-10">${resultButtons(task, true)}</div>
+    <label class="inline-field mt-10">Изменить статус вручную
+      <select class="inline-select" data-task-status-select="${task.id}" aria-label="Статус задания">
+        ${TASK_STATUSES.map((code) => `<option value="${code}" ${code === task.status ? 'selected' : ''}>${esc(statusName(code))}</option>`).join('')}
+      </select>
+    </label>`;
+}
+
+export function bindDetailEvents() {
+  $('taskDetail').addEventListener('change', (event) => {
+    const select = event.target.closest('[data-task-status-select]');
+    if (!select) return;
+    updateTaskStatus(Number(select.dataset.taskStatusSelect), select.value)
+      .catch((error) => toast(error.message, 'error'));
+  });
 }
 
 export function selectTask(id) {
@@ -399,16 +424,13 @@ export async function renameTaskContact(taskId) {
   });
 }
 
-export async function confirmTaskResult(taskId) {
-  const selected = $('detail-result');
-  const note = ($('detail-note').value || '').trim();
-  if (!selected) {
-    toast('Не найден выбор результата', 'error');
-    return;
-  }
+export async function confirmTaskResult(taskId, result) {
+  // Примечание берём только из карточки этого же задания.
+  const noteField = S.tasksUi.selectedId === taskId ? $('detail-note') : null;
+  const note = noteField ? (noteField.value || '').trim() : '';
   await api(`/tasks/${taskId}/confirm`, {
     method: 'POST',
-    body: JSON.stringify({ result: selected.value, note: note || null }),
+    body: JSON.stringify({ result, note: note || null }),
   });
   toast('Результат сохранён');
   await refreshTasks();

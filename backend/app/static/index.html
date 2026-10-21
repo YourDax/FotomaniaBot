@@ -15,25 +15,25 @@
       <div class="logo">Школьные рассылки<small>MAX • локальный режим</small></div>
       <nav class="nav">
         <button type="button" data-route="home" class="active" aria-current="page">
-          <span class="nav-icon" aria-hidden="true">◔</span><span class="nav-label">Обзор</span>
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8M5 10v10h14V10"/></svg><span class="nav-label">Обзор</span>
         </button>
         <button type="button" data-route="schools">
-          <span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">Школы и классы</span>
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V8l8-5 8 5v13M9 21v-6h6v6M8 11h.01M12 11h.01M16 11h.01"/></svg><span class="nav-label">Школы и классы</span>
           <span class="nav-count" id="navCountSchools">0</span>
         </button>
         <button type="button" data-route="contacts">
-          <span class="nav-icon" aria-hidden="true">☎</span><span class="nav-label">Контакты КР/РК</span>
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2z"/></svg><span class="nav-label">Контакты КР/РК</span>
           <span class="nav-count" id="navCountContacts">0</span>
         </button>
         <button type="button" data-route="import">
-          <span class="nav-icon" aria-hidden="true">⇪</span><span class="nav-label">Импорт таблицы</span>
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg><span class="nav-label">Импорт таблицы</span>
         </button>
         <button type="button" data-route="campaigns">
-          <span class="nav-icon" aria-hidden="true">✉</span><span class="nav-label">Рассылки</span>
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg><span class="nav-label">Рассылки</span>
           <span class="nav-count" id="navCountCampaigns">0</span>
         </button>
         <button type="button" data-route="settings">
-          <span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Настройки</span>
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span class="nav-label">Настройки</span>
         </button>
       </nav>
       <div class="sidebar-foot">
@@ -45,14 +45,19 @@
 
     <main class="main" id="main">
       <header class="topbar">
-        <button type="button" class="btn icon menu-btn" id="menuBtn" aria-label="Открыть меню">☰</button>
+        <button type="button" class="btn icon menu-btn" id="menuBtn" aria-label="Открыть меню">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
         <div class="titles">
           <h1 id="viewTitle">Обзор</h1>
           <p class="muted" id="viewHint">Сводка по школам, контактам и рассылкам</p>
         </div>
         <div class="topbar-tools">
+          <span class="pill" id="maxPill" title="Состояние вкладки MAX в подключённом браузере"><span class="dot"></span>MAX: проверка</span>
           <span class="pill" id="healthPill"><span class="dot"></span>проверка</span>
-          <button type="button" class="btn icon" id="themeBtn" aria-label="Переключить тему">◐</button>
+          <button type="button" class="btn icon" id="themeBtn" aria-label="Переключить тему">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18a9 9 0 000-18z" fill="currentColor"/></svg>
+          </button>
         </div>
       </header>
 
@@ -66,10 +71,10 @@
             <div class="kpi"><label>Ждут подтверждения</label><b id="kpiReview">0</b><small>заданий в ручном режиме</small></div>
           </div>
 
-          <div class="grid-2" style="margin-top:16px">
+          <div class="grid-2 mt-16">
             <div class="card">
               <div class="card-head"><h2>Быстрый старт</h2></div>
-              <ol class="muted" style="padding-left:18px;margin:0 0 12px">
+              <ol class="muted steps">
                 <li>Импортируйте таблицу школы с контактами КР и РК.</li>
                 <li>Создайте рассылку: текст для КР и текст для РК.</li>
                 <li>В заданиях подготовьте черновик в MAX и отправьте сообщение вручную.</li>
@@ -86,11 +91,12 @@
               </div>
               <dl class="kv">
                 <dt>Сервер</dt><dd id="homeStatusServer">проверка…</dd>
+                <dt>MAX</dt><dd id="homeStatusMax">—</dd>
                 <dt>Воркер доставки</dt><dd id="homeStatusWorker">—</dd>
                 <dt>Интеграция</dt><dd id="homeStatusIntegration">—</dd>
                 <dt>Режим</dt><dd id="homeStatusMode">—</dd>
               </dl>
-              <p class="muted" style="margin-top:12px">MAX открывается в отдельном профиле браузера. Текст вставляется в поле ввода, но не отправляется автоматически.</p>
+              <p class="muted mt-12">MAX открывается в отдельном профиле браузера. Текст вставляется в поле ввода, но не отправляется автоматически.</p>
             </div>
           </div>
 
@@ -106,13 +112,11 @@
           <div class="card">
             <div class="card-head">
               <h2>Школы и классы</h2><span class="spacer"></span>
-              <div class="search" style="min-width:220px">
+              <div class="search search-wide">
                 <label class="sr-only" for="schoolSearch">Поиск школы или класса</label>
                 <input id="schoolSearch" type="search" placeholder="Поиск школы или класса">
               </div>
-              <button type="button" class="btn small ghost" data-action="collapse-all" data-scope="schools">Свернуть все</button>
-              <button type="button" class="btn small ghost" data-action="collapse-none" data-scope="schools">Развернуть все</button>
-              <button type="button" class="btn ghost" id="schoolsRefresh">Обновить</button>
+              <button type="button" class="btn small ghost" id="schoolsCollapseToggle" data-action="collapse-toggle-all" data-scope="schools">Свернуть все</button>
               <button type="button" class="btn primary" id="btnAddSchool">Добавить школу/класс</button>
             </div>
             <p class="muted card-sub" id="schoolsInfo">Загрузка…</p>
@@ -160,7 +164,7 @@
               </div>
             </div>
 
-            <div class="row" id="contactBulk" style="margin:12px 0" hidden>
+            <div class="row my-12" id="contactBulk" hidden>
               <span class="pill" id="contactSelectedCount">Выбрано: 0</span>
               <button type="button" class="btn small ghost" id="btnExportContacts">Скачать CSV</button>
               <button type="button" class="btn small danger" id="btnBulkDeleteContacts">Удалить выделенные</button>
@@ -169,11 +173,16 @@
 
             <p class="muted card-sub" id="contactsInfo">Загрузка…</p>
             <div class="table-wrap">
-              <table>
+              <table class="cards">
                 <thead>
                   <tr>
                     <th><input type="checkbox" id="selectAllContacts" aria-label="Выбрать все контакты"></th>
-                    <th>ФИО</th><th>Роль</th><th>Школа</th><th>Класс</th><th>Телефон</th><th>MAX</th><th>Действия</th>
+                    <th aria-sort="none"><button type="button" class="th-sort" data-sort-contacts="name">ФИО</button></th>
+                    <th aria-sort="none"><button type="button" class="th-sort" data-sort-contacts="role">Роль</button></th>
+                    <th aria-sort="none"><button type="button" class="th-sort" data-sort-contacts="school">Школа</button></th>
+                    <th aria-sort="none"><button type="button" class="th-sort" data-sort-contacts="klass">Класс</button></th>
+                    <th aria-sort="none"><button type="button" class="th-sort" data-sort-contacts="phone">Телефон</button></th>
+                    <th>MAX</th><th>Действия</th>
                   </tr>
                 </thead>
                 <tbody id="contactRows"></tbody>
@@ -183,7 +192,7 @@
               <button type="button" class="btn small ghost" id="contactPrev">Назад</button>
               <button type="button" class="btn small ghost" id="contactNext">Вперёд</button>
               <label class="check muted">Строк на странице
-                <select id="contactPageSize" style="width:auto">
+                <select id="contactPageSize" class="auto-width">
                   <option value="25">25</option><option value="50" selected>50</option>
                   <option value="100">100</option><option value="200">200</option>
                 </select>
@@ -213,12 +222,12 @@
               </div>
             </div>
 
-            <div class="dropzone" id="importDrop" style="margin-top:14px">
+            <div class="dropzone mt-14" id="importDrop">
               <input id="importFile" type="file" accept=".xlsx,.xlsm,.csv">
               <label for="importFile">Выберите Excel/CSV файл</label>
               <div class="muted" id="importFileName">Файл не выбран. Можно перетащить файл в эту область.</div>
             </div>
-            <div class="row" style="margin-top:12px">
+            <div class="row mt-12">
               <button type="button" class="btn primary" id="importPreviewBtn" disabled>Показать данные</button>
               <button type="button" class="btn ghost" id="importReset">Сбросить</button>
             </div>
@@ -229,78 +238,34 @@
             <div id="importWarnings"></div>
             <div id="importMapping" class="mapping"></div>
             <p class="muted">Повторяющиеся пары «класс + ФИО + роль» пропускаются сервером, чтобы не создавать дубликаты контактов.</p>
-            <div class="row" style="margin:14px 0 8px">
+            <div class="row my-14">
               <h3>Предпросмотр данных</h3><span class="spacer"></span>
               <span class="muted" id="importRowInfo"></span>
               <button type="button" class="btn small ghost" id="importShowAll">Показать все строки</button>
             </div>
-            <div class="table-wrap" style="max-height:320px">
+            <div class="table-wrap table-short">
               <table>
                 <thead id="importHead"></thead>
                 <tbody id="importRows"></tbody>
               </table>
             </div>
-            <div class="row end" style="margin-top:14px">
+            <div class="row end mt-14">
               <button type="button" class="btn primary" id="importRun">Импортировать контакты</button>
             </div>
-            <div id="importResult" style="margin-top:12px"></div>
+            <div id="importResult" class="mt-12"></div>
           </div>
         </section>
         <section class="view hidden" id="route-campaigns">
           <div class="card">
-            <div class="card-head"><h2>Новая рассылка</h2>
-              <span class="badge mute">ручной режим</span>
-            </div>
-            <div class="grid-2">
-              <div class="field">
-                <span>Название <span class="req">*</span></span>
-                <input id="campaignName" placeholder="Например: Собрание 15 сентября" maxlength="200">
-              </div>
-              <div class="field">
-                <span>Описание (необязательно)</span>
-                <input id="campaignDescription" placeholder="Комментарий для себя" maxlength="200">
-              </div>
-            </div>
-            <p class="muted" style="margin:12px 0 0">Для каждой роли можно подготовить от 1 до 5 сообщений: у каждого получателя появится своя кнопка «Подготовить в MAX» на каждое сообщение. Нужен текст хотя бы для одной роли.</p>
-            <div class="grid-2" style="margin-top:12px">
-              <div class="msgset" id="msgsetKR"></div>
-              <div class="msgset" id="msgsetRK"></div>
-            </div>
-            <div class="card-head" style="margin-top:14px">
-              <h3>Получатели</h3><span class="spacer"></span>
-              <button type="button" class="btn small ghost" id="btnSelectAllRecipients">Выбрать всех</button>
-              <button type="button" class="btn small ghost" id="btnClearRecipients">Снять выбор</button>
-              <button type="button" class="btn small ghost" data-action="collapse-all" data-scope="picker">Свернуть все</button>
-              <button type="button" class="btn small ghost" data-action="collapse-none" data-scope="picker">Развернуть все</button>
-            </div>
-            <div class="search" style="max-width:320px;margin-bottom:10px">
-              <label class="sr-only" for="recipientSearch">Поиск получателя</label>
-              <input id="recipientSearch" type="search" placeholder="Поиск по ФИО, школе или классу">
-            </div>
-            <div class="picker" id="campaignPicker"></div>
-            <div class="sticky-actions">
-              <span class="pill" id="campaignSelected">Выбрано получателей: 0</span>
-              <span class="muted" id="campaignSelectedBreakdown"></span>
-              <span class="spacer" style="flex:1"></span>
-              <button type="button" class="btn ghost" id="campaignPreviewBtn">Предпросмотр текста</button>
-              <button type="button" class="btn primary" id="campaignCreateBtn">Создать рассылку</button>
-            </div>
-            <div class="hidden" id="campaignPreviewWrap" style="margin-top:12px">
-              <h3>Предпросмотр первого получателя</h3>
-              <pre class="message" id="campaignPreview"></pre>
-            </div>
-          </div>
-
-          <div class="card">
             <div class="card-head">
               <h2>Мои рассылки</h2><span class="spacer"></span>
-              <div class="search" style="min-width:200px">
+              <div class="search search-wide">
                 <label class="sr-only" for="campaignSearch">Поиск рассылки</label>
                 <input id="campaignSearch" type="search" placeholder="Поиск по названию">
               </div>
               <div>
                 <label class="sr-only" for="campaignStatusFilter">Статус рассылки</label>
-                <select id="campaignStatusFilter" style="width:auto">
+                <select id="campaignStatusFilter" class="auto-width">
                   <option value="">Все статусы</option>
                   <option value="DRAFT">Черновик</option>
                   <option value="RUNNING">В работе</option>
@@ -310,14 +275,15 @@
                 </select>
               </div>
               <button type="button" class="btn ghost" id="campaignsRefresh">Обновить</button>
+              <button type="button" class="btn primary" id="btnNewCampaign">Новая рассылка</button>
             </div>
-            <div class="row" id="campaignBulk" style="margin-bottom:10px" hidden>
+            <div class="row mb-10" id="campaignBulk" hidden>
               <span class="pill" id="campaignSelectedCount">Выбрано: 0</span>
               <button type="button" class="btn small danger" id="btnBulkDeleteCampaigns">Удалить выделенные</button>
               <button type="button" class="btn small ghost" id="btnClearCampaignSelection">Снять выделение</button>
             </div>
             <div class="table-wrap">
-              <table>
+              <table class="cards">
                 <thead>
                   <tr>
                     <th><input type="checkbox" id="selectAllCampaigns" aria-label="Выбрать все рассылки"></th>
@@ -333,6 +299,72 @@
               <span class="muted" id="campaignPageInfo"></span>
             </div>
           </div>
+
+          <div class="card hidden" id="campaignForm">
+            <div class="card-head">
+              <h2 id="campaignFormTitle">Новая рассылка</h2>
+              <span class="badge mute">ручной режим</span>
+              <span class="spacer"></span>
+              <button type="button" class="btn small ghost" id="campaignFormClose">Закрыть форму</button>
+            </div>
+            <div class="stepper" id="campaignStepper">
+              <button type="button" class="active" data-cstep="1">1. Тексты</button>
+              <button type="button" data-cstep="2">2. Получатели</button>
+              <button type="button" data-cstep="3">3. Проверка</button>
+            </div>
+
+            <div data-cpanel="1">
+              <div class="grid-2">
+                <div class="field">
+                  <span>Название <span class="req">*</span></span>
+                  <input id="campaignName" placeholder="Например: Собрание 15 сентября" maxlength="200">
+                </div>
+                <div class="field">
+                  <span>Описание (необязательно)</span>
+                  <input id="campaignDescription" placeholder="Комментарий для себя" maxlength="200">
+                </div>
+              </div>
+              <p class="muted mt-12">Для каждой роли можно подготовить от 1 до 5 сообщений: у каждого получателя появится своя кнопка «Подготовить в MAX» на каждое сообщение. Нужен текст хотя бы для одной роли.</p>
+              <div class="grid-2 mt-12">
+                <div class="msgset" id="msgsetKR"></div>
+                <div class="msgset" id="msgsetRK"></div>
+              </div>
+              <div class="step-actions">
+                <button type="button" class="btn primary" data-cnav="next">Далее: получатели →</button>
+              </div>
+            </div>
+
+            <div data-cpanel="2" hidden>
+              <div class="card-head">
+                <h3>Получатели</h3><span class="spacer"></span>
+                <button type="button" class="btn small ghost" id="btnSelectAllRecipients">Выбрать всех</button>
+                <button type="button" class="btn small ghost" id="btnClearRecipients">Снять выбор</button>
+                <button type="button" class="btn small ghost" id="pickerCollapseToggle" data-action="collapse-toggle-all" data-scope="picker">Свернуть все</button>
+              </div>
+              <div class="search search-field mb-10">
+                <label class="sr-only" for="recipientSearch">Поиск получателя</label>
+                <input id="recipientSearch" type="search" placeholder="Поиск по ФИО, школе или классу">
+              </div>
+              <div class="picker" id="campaignPicker"></div>
+              <div class="sticky-actions">
+                <span class="pill" id="campaignSelected">Выбрано получателей: 0</span>
+                <span class="muted" id="campaignSelectedBreakdown"></span>
+                <span class="grow-spacer"></span>
+                <button type="button" class="btn ghost" data-cnav="prev">← Назад</button>
+                <button type="button" class="btn primary" data-cnav="next">Далее: проверка →</button>
+              </div>
+            </div>
+
+            <div data-cpanel="3" hidden>
+              <dl class="kv" id="campaignSummary"></dl>
+              <h3 class="mt-14">Предпросмотр первого получателя</h3>
+              <pre class="message mt-8" id="campaignPreview"></pre>
+              <div class="step-actions">
+                <button type="button" class="btn ghost" data-cnav="prev">← Назад</button>
+                <button type="button" class="btn primary" id="campaignCreateBtn">Создать рассылку</button>
+              </div>
+            </div>
+          </div>
         </section>
         <section class="view hidden" id="route-tasks">
           <div class="card">
@@ -343,24 +375,36 @@
               <span class="spacer"></span>
               <label class="check muted"><input type="checkbox" id="autoRefreshToggle" checked> автообновление</label>
               <button type="button" class="btn small ghost" id="taskRefreshBtn">Обновить</button>
-              <a class="btn small ghost" id="taskExportLink" href="#" target="_blank" rel="noopener">Скачать CSV</a>
-              <button type="button" class="btn small ghost" id="taskEditMessagesBtn" title="Изменить тексты КР и РК (и их количество) для всех необработанных заданий">Изменить тексты</button>
-              <button type="button" class="btn small danger" id="taskStopBtn">Остановить рассылку</button>
+              <details class="menu" id="taskMenu">
+                <summary class="btn small ghost" aria-label="Другие действия" title="Другие действия">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3"/></svg>
+                </summary>
+                <div class="menu-list">
+                  <a class="menu-item" id="taskExportLink" href="#" target="_blank" rel="noopener">Скачать CSV</a>
+                  <button type="button" class="menu-item" id="taskEditMessagesBtn" title="Изменить тексты КР и РК (и их количество) для всех необработанных заданий">Изменить тексты</button>
+                  <div id="taskStopGroup">
+                    <hr>
+                    <button type="button" class="menu-item danger" id="taskStopBtn">Остановить рассылку</button>
+                  </div>
+                </div>
+              </details>
             </div>
-            <dl class="kv" style="margin-bottom:12px">
+            <dl class="kv mb-12">
               <dt>Сообщения</dt><dd id="taskMessagesInfo">—</dd>
               <dt>Обновлено</dt><dd id="taskUpdatedAt">—</dd>
               <dt>Последний запрос</dt><dd id="taskLastError">ошибок нет</dd>
             </dl>
             <div class="row">
               <div class="grow">
-                <div class="progress" id="taskProgress"><span style="width:0%"></span></div>
+                <div class="progress" id="taskProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                  <span class="done"></span><span class="prep"></span>
+                </div>
               </div>
               <span class="muted" id="taskProgressText">0 из 0 подтверждено</span>
             </div>
-            <div class="chips" id="taskChips" style="margin-top:12px"></div>
+            <div class="chips mt-12" id="taskChips"></div>
 
-            <div class="row" style="margin:14px 0">
+            <div class="row my-14">
               <label class="inline-field" id="taskBulkMessageWrap" hidden>Сообщение
                 <select id="taskBulkMessage" aria-label="Номер сообщения для массовой подготовки"></select>
               </label>
@@ -390,7 +434,7 @@
                 </select>
               </div>
               <label class="check muted">Строк на странице
-                <select id="taskPageSize" style="width:auto">
+                <select id="taskPageSize" class="auto-width">
                   <option value="25">25</option><option value="50" selected>50</option><option value="100">100</option>
                 </select>
               </label>
@@ -404,7 +448,7 @@
                 <span class="muted" id="taskListInfo">—</span>
               </div>
               <div class="table-wrap">
-                <table>
+                <table class="cards">
                   <thead>
                     <tr>
                       <th>Получатель</th><th>Школа</th><th>Класс</th><th>Роль</th>
@@ -436,10 +480,11 @@
               <p class="muted">Приложение работает только в ручном режиме: сообщение готовится в MAX, отправку выполняет оператор.</p>
               <dl class="kv">
                 <dt>Текущий режим</dt><dd id="settingsMode">—</dd>
+                <dt>MAX</dt><dd id="settingsMax">—</dd>
                 <dt>Воркер</dt><dd id="settingsWorker">—</dd>
                 <dt>Интеграция</dt><dd id="settingsIntegration">—</dd>
               </dl>
-              <div class="row" style="margin-top:12px">
+              <div class="row mt-12">
                 <button type="button" class="btn ghost" id="settingsCheckHealth">Проверить сервер</button>
               </div>
             </div>
@@ -476,7 +521,7 @@
 
           <div class="card">
             <div class="card-head"><h2>Данные и приватность</h2></div>
-            <ul class="muted" style="margin:0;padding-left:18px">
+            <ul class="muted steps">
               <li>База данных, журналы и снимки страниц MAX остаются на этом компьютере.</li>
               <li>В журнал пишутся только служебные операции; содержимое сообщений и телефоны не дублируются.</li>
               <li>Перед массовой рассылкой проверяйте текст в карточке задания — он уже подставлен с ФИО получателя.</li>
@@ -485,11 +530,6 @@
           </div>
         </section>
       </div>
-
-
-
-
-
     </main>
   </div>
 
@@ -501,6 +541,6 @@
     <div class="modal-foot" id="modalFoot"></div>
   </dialog>
 
-  <script type="module" src="/static/js/main.js?v=20261021-modules"></script>
+  <script type="module" src="/static/js/main.js?v=20261021-ux"></script>
 </body>
 </html>

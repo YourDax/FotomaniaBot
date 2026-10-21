@@ -1,5 +1,5 @@
 /* Маршрутизация по #hash, состояние сервера и сводка. */
-import { loadCampaigns, loadMessageTemplates } from './campaigns.js';
+import { loadCampaigns, loadMessageTemplates, openCampaignForm } from './campaigns.js';
 import { loadContacts } from './contacts.js';
 import { $, api, qa, S } from './core.js';
 import { refreshDashboard } from './dashboard.js';
@@ -45,7 +45,9 @@ export function go(route, params = {}) {
   if (target === 'contacts') loadContacts().catch((error) => toast(error.message, 'error'));
   if (target === 'campaigns') {
     loadContacts().catch(() => {});
-    loadCampaigns().catch((error) => toast(error.message, 'error'));
+    loadCampaigns()
+      .then(() => { if (!S.campaigns.length) openCampaignForm(); }) // первой рассылке сразу показываем форму
+      .catch((error) => toast(error.message, 'error'));
     loadMessageTemplates().catch(() => {});
   }
   if (target === 'home') refreshDashboard().catch(() => {});
@@ -54,12 +56,20 @@ export function go(route, params = {}) {
     const campaignId = params.campaignId || S.tasksUi.campaignId;
     openTasks(campaignId).catch((error) => toast(error.message, 'error'));
     startAutoRefresh();
+    checkHealth(true);
   } else {
     stopAutoRefresh();
   }
 }
 
 // --- Здоровье, статистика, настройки --------------------------------------
+
+// Состояние вкладки MAX в подключённом браузере: [тон, подпись, пояснение].
+const MAX_STATES = {
+  ready: ['ok', 'MAX: подключён', 'вкладка MAX открыта'],
+  no_tab: ['warn', 'MAX: нет вкладки', 'в браузере нет открытой вкладки MAX — откройте web.max.ru и войдите'],
+  offline: ['err', 'MAX: браузер не запущен', 'браузер с отладочным портом не найден — он запустится при первой подготовке сообщения'],
+};
 
 export function renderHealth() {
   const data = S.health;
@@ -71,6 +81,13 @@ export function renderHealth() {
   sidePill.className = 'pill ' + (ok ? 'ok' : 'err');
   sidePill.innerHTML = `<span class="dot"></span>${ok ? 'online' : 'offline'}`;
   $('homeStatusServer').textContent = ok ? 'доступен' : 'нет ответа — проверьте, запущено ли приложение';
+  const [maxTone, maxLabel, maxHint] = (data && MAX_STATES[data.max]) || ['', 'MAX: —', 'состояние неизвестно'];
+  const maxPill = $('maxPill');
+  maxPill.className = 'pill ' + maxTone;
+  maxPill.innerHTML = `<span class="dot"></span>${maxLabel}`;
+  maxPill.title = maxHint;
+  $('homeStatusMax').textContent = maxHint;
+  $('settingsMax').textContent = maxHint;
   $('homeStatusWorker').textContent = data ? (data.worker ? 'активен' : 'не запущен') : '—';
   $('homeStatusIntegration').textContent = data ? String(data.integration || '—') : '—';
   $('homeStatusMode').textContent = data ? (data.mode === 'manual' ? 'ручной' : String(data.mode || '—')) : '—';

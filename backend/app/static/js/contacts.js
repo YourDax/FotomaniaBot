@@ -1,5 +1,5 @@
 /* Раздел «Контакты КР/РК». */
-import { $, api, esc, plural, qa, S } from './core.js';
+import { $, api, esc, plural, qa, S, savePrefs } from './core.js';
 import { loadSchools, updateNavCounts } from './schools.js';
 import { confirmAction, openModal, toast } from './ui.js';
 
@@ -35,7 +35,7 @@ export function contactFieldMarkup(field) {
     ? `<select id="field-${field.id}">${(field.options || []).map((option) => `<option value="${esc(option.value)}" ${String(option.value) === String(field.value) ? 'selected' : ''}>${esc(option.label)}</option>`).join('')}</select>`
     : `<input id="field-${field.id}" value="${esc(field.value)}" placeholder="${esc(field.placeholder || '')}">`;
   return `
-    <div class="field" style="margin-bottom:10px">
+    <div class="field mb-10">
       <span>${esc(field.label)}${field.required ? ' <span class="req">*</span>' : ''}</span>
       ${control}
       ${field.hint ? `<small class="muted">${esc(field.hint)}</small>` : ''}
@@ -79,6 +79,7 @@ export function readContactForm(contact) {
     phone: rawPhone || null,
     school_id: schoolId,
     class_id: classId,
+    max_user_id: contact ? contact.max_user_id : null, // форма его не показывает — не затираем
     username: ($('field-username').value || '').trim() || null,
     chat_link: ($('field-chat_link').value || '').trim() || null,
     consent_basis: ($('field-consent').value || '').trim() || null,
@@ -102,7 +103,7 @@ export async function openContactDialog(contactId) {
     ? JSON.stringify(contact.custom_fields, null, 2)
     : '';
   const body = fields.map(contactFieldMarkup).join('') + `
-    <label class="check" style="margin-bottom:10px">
+    <label class="check mb-10">
       <input type="checkbox" id="field-optout" ${contact && contact.opted_out ? 'checked' : ''}>
       Контакт отписался — исключать из рассылок
     </label>
@@ -169,11 +170,6 @@ export async function loadContacts() {
   return rows;
 }
 
-export function filteredContacts() {
-  const ui = S.contactsUi;
-  return S.contacts.filter((contact) => (ui.role ? contact.role === ui.role : true));
-}
-
 export function schoolNameById(id) {
   return (S.schools.find((school) => school.id === id) || {}).name || '—';
 }
@@ -184,6 +180,97 @@ export function classNameById(id) {
     if (found) return found.name;
   }
   return '—';
+}
+
+const SORT_VALUE = {
+  name: (contact) => contact.name,
+  role: (contact) => contact.role,
+  school: (contact) => schoolNameById(contact.school_id),
+  klass: (contact) => classNameById(contact.class_id),
+  phone: (contact) => contact.phone || '',
+};
+
+export function filteredContacts() {
+  const ui = S.contactsUi;
+  const rows = S.contacts.filter((contact) => (ui.role ? contact.role === ui.role : true));
+  const value = SORT_VALUE[ui.sort];
+  if (!value) return rows;
+  const sign = ui.dir === 'desc' ? -1 : 1;
+  return rows.slice().sort((a, b) => sign * String(value(a)).localeCompare(String(value(b)), 'ru', { numeric: true }));
+}
+
+export function toggleContactSort(key) {
+  const ui = S.contactsUi;
+  if (ui.sort === key) ui.dir = ui.dir === 'asc' ? 'desc' : 'asc';
+  else Object.assign(ui, { sort: key, dir: 'asc' });
+  ui.page = 1;
+  renderContacts();
+}
+
+function saveContactFilters() {
+  const { q, school, klass, role, optedOut, sort, dir } = S.contactsUi;
+  S.prefs.contacts = { q, school, klass, role, optedOut, sort, dir };
+  savePrefs();
+}
+
+// Правка роли и телефона прямо в таблице: остальные поля контакта отправляются как есть.
+export async function patchContact(id, changes) {
+  const contact = S.contacts.find((item) => item.id === Number(id));
+  if (!contact) return;
+  const payload = {
+    name: contact.name,
+    role: contact.role,
+    phone: contact.phone,
+    max_user_id: contact.max_user_id,
+    username: contact.username,
+    chat_link: contact.chat_link,
+    consent_basis: contact.consent_basis,
+    opted_out: contact.opted_out,
+    school_id: contact.school_id,
+    class_id: contact.class_id,
+    custom_fields: contact.custom_fields || {},
+    ...changes,
+  };
+  await api(`/clients/${contact.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+  await loadSchools();
+  await loadContacts();
+  toast('Контакт обновлён');
+}
+
+export function editContactPhone(id) {
+  const contact = S.contacts.find((item) => item.id === Number(id));
+  const cell = document.querySelector(`[data-phone-cell="${Number(id)}"]`);
+  if (!contact || !cell) return;
+  cell.innerHTML = `<input class="inline-input" type="tel" value="${esc(contact.phone || '')}" aria-label="Телефон ${esc(contact.name)}" placeholder="+7 999 123-45-67">`;
+  const input = cell.querySelector('input');
+  let finished = false;
+  const finish = async (save) => {
+    if (finished) return;
+    finished = true;
+    const phone = input.value.trim();
+    if (!save || phone === (contact.phone || '')) {
+      renderContacts();
+      return;
+    }
+    if (phone && phone.replace(/\D/g, '').length < 10) {
+      toast('Телефон должен содержать не менее 10 цифр', 'warn');
+      renderContacts();
+      return;
+    }
+    try {
+      await patchContact(contact.id, { phone: phone || null });
+    } catch (error) {
+      toast(error.message, 'error');
+      renderContacts();
+    }
+  };
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') finish(true);
+    if (event.key === 'Escape') finish(false);
+  });
+  input.addEventListener('blur', () => finish(false));
+  input.focus();
+  input.select();
 }
 
 export function renderContacts() {
@@ -202,14 +289,22 @@ export function renderContacts() {
   $('contactRows').innerHTML = visible.length
     ? visible.map((contact) => `
       <tr>
-        <td><input type="checkbox" class="contact-check" data-id="${contact.id}" ${ui.selected.has(contact.id) ? 'checked' : ''} aria-label="Выбрать ${esc(contact.name)}"></td>
-        <td><b>${esc(contact.name)}</b>${contact.opted_out ? ' <span class="badge err">отписался</span>' : ''}</td>
-        <td><span class="badge ${contact.role === 'KR' ? 'ok' : 'mute'}">${contact.role === 'KR' ? 'КР' : 'РК'}</span></td>
-        <td>${esc(schoolNameById(contact.school_id))}</td>
-        <td>${esc(classNameById(contact.class_id))}</td>
-        <td>${contact.phone ? `<button type="button" class="btn link" data-action="copy" data-copy="${esc(contact.phone)}">${esc(contact.phone)}</button>` : '—'}</td>
-        <td>${contact.chat_link ? '<span class="badge ok">ссылка</span>' : contact.max_user_id ? '<span class="badge">id</span>' : '<span class="badge warn">нет</span>'}</td>
-        <td>
+        <td data-label=""><input type="checkbox" class="contact-check" data-id="${contact.id}" ${ui.selected.has(contact.id) ? 'checked' : ''} aria-label="Выбрать ${esc(contact.name)}"></td>
+        <td data-label="ФИО"><b>${esc(contact.name)}</b>${contact.opted_out ? ' <span class="badge err">отписался</span>' : ''}</td>
+        <td data-label="Роль">
+          <select class="inline-select" data-contact-role="${contact.id}" aria-label="Роль: ${esc(contact.name)}">
+            <option value="KR" ${contact.role === 'KR' ? 'selected' : ''}>КР</option>
+            <option value="RK" ${contact.role === 'RK' ? 'selected' : ''}>РК</option>
+          </select>
+        </td>
+        <td data-label="Школа">${esc(schoolNameById(contact.school_id))}</td>
+        <td data-label="Класс">${esc(classNameById(contact.class_id))}</td>
+        <td data-label="Телефон" data-phone-cell="${contact.id}">
+          ${contact.phone ? `<button type="button" class="btn link" data-action="copy" data-copy="${esc(contact.phone)}" title="Скопировать">${esc(contact.phone)}</button>` : '—'}
+          <button type="button" class="btn link" data-action="contact-phone-edit" data-id="${contact.id}" title="Изменить телефон" aria-label="Изменить телефон: ${esc(contact.name)}">✎</button>
+        </td>
+        <td data-label="MAX">${contact.chat_link ? '<span class="badge ok">ссылка</span>' : contact.max_user_id ? '<span class="badge">id</span>' : '<span class="badge warn">нет</span>'}</td>
+        <td data-label="Действия">
           <button type="button" class="btn small ghost" data-action="contact-edit" data-id="${contact.id}">Изменить</button>
           <button type="button" class="btn small danger" data-action="contact-delete" data-id="${contact.id}">Удалить</button>
         </td>
@@ -225,6 +320,11 @@ export function renderContacts() {
     });
   });
   renderContactSelection();
+  qa('[data-sort-contacts]').forEach((button) => {
+    const active = ui.sort === button.dataset.sortContacts;
+    button.closest('th').setAttribute('aria-sort', active ? (ui.dir === 'desc' ? 'descending' : 'ascending') : 'none');
+  });
+  saveContactFilters();
   $('contactPageInfo').textContent = rows.length
     ? `Показано ${start + 1}–${Math.min(start + pageSize, rows.length)} из ${rows.length}`
     : '';

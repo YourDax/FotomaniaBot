@@ -1,13 +1,13 @@
 /* Делегирование действий и привязка обработчиков событий. */
-import { createCampaign, deleteCampaign, deleteSelectedCampaigns, filteredCampaigns, loadCampaigns, openCampaignMessagesDialog, openTaskMessageDialog, pickerContacts, previewCampaign, renderCampaigns, renderPicker, startCampaign, stopCampaign } from './campaigns.js';
-import { copyToClipboard, deleteContactById, deleteSelectedContacts, exportContacts, filteredContacts, loadContacts, openContactDialog, renderContacts } from './contacts.js';
+import { closeCampaignForm, createCampaign, deleteCampaign, deleteSelectedCampaigns, duplicateCampaign, filteredCampaigns, loadCampaigns, openCampaignForm, openCampaignMessagesDialog, openTaskMessageDialog, pickerContacts, renderCampaigns, renderPicker, setCampaignStep, startCampaign, stopCampaign } from './campaigns.js';
+import { copyToClipboard, deleteContactById, deleteSelectedContacts, editContactPhone, exportContacts, filteredContacts, loadContacts, openContactDialog, patchContact, renderContacts, toggleContactSort } from './contacts.js';
 import { $, api, debounce, qa, S, savePrefs } from './core.js';
 import { applyPrefs, applyTheme } from './dashboard.js';
 import { previewImport, readImportFile, renderImport, resetImport, runImport } from './import.js';
 import { checkHealth, go, toggleSidebar } from './router.js';
-import { addClassToSchool, classOptions, createSchoolAndClass, deleteClass, deleteSchool, loadSchools, renameClass, renameSchool, renderSchoolOptions, renderSchools, setAllCollapsed, toggleCollapse } from './schools.js';
-import { confirmTaskResult, openAllChats, openTaskChat, paintTaskRows, prepareAll, prepareTask, refreshTasks, renameTaskContact, startAutoRefresh, stopAutoRefresh } from './tasks.js';
-import { toast } from './ui.js';
+import { addClassToSchool, classOptions, createSchoolAndClass, deleteClass, deleteSchool, renameClass, renameSchool, renderSchoolOptions, renderSchools, toggleAllCollapsed, toggleCollapse } from './schools.js';
+import { bindDetailEvents, confirmTaskResult, openAllChats, openTaskChat, paintTaskRows, prepareAll, prepareTask, refreshTasks, renameTaskContact, startAutoRefresh, stopAutoRefresh } from './tasks.js';
+import { confirmAction, toast } from './ui.js';
 
 // --- Делегирование действий -------------------------------------------------
 
@@ -19,16 +19,17 @@ export const ACTIONS = {
   'class-rename': (id) => renameClass(id),
   'class-delete': (id) => deleteClass(id),
   'collapse-toggle': (id, element) => toggleCollapse(element),
-  'collapse-all': (id, element) => setAllCollapsed(element.dataset.scope, true),
-  'collapse-none': (id, element) => setAllCollapsed(element.dataset.scope, false),
+  'collapse-toggle-all': (id, element) => toggleAllCollapsed(element.dataset.scope),
   'contact-edit': (id) => openContactDialog(id),
   'contact-delete': (id) => deleteContactById(id),
   'contact-create': () => openContactDialog(null),
+  'contact-phone-edit': (id) => editContactPhone(id),
   'copy': (id, element) => copyToClipboard(element.dataset.copy || ''),
   'campaign-open': (id) => go('tasks', { campaignId: id }),
   'campaign-start': (id) => startCampaign(id),
   'campaign-stop': (id) => stopCampaign(id),
   'campaign-delete': (id) => deleteCampaign(id),
+  'campaign-duplicate': (id) => duplicateCampaign(id),
   'campaign-export': (id) => window.open(`/api/reports/${id}/export`, '_blank', 'noopener'),
   'task-prepare': (id, node) => prepareTask(id, Number(node.dataset.msg) || 1),
   'task-open': (id) => openTaskChat(id),
@@ -38,11 +39,21 @@ export const ACTIONS = {
     const entry = (task.messages || []).find((item) => item.index === (Number(node.dataset.msg) || 1));
     return copyToClipboard(entry ? entry.text : (task.message || ''));
   },
-  'task-confirm': (id) => confirmTaskResult(id),
+  'task-confirm': (id, node) => confirmTaskResult(id, node.dataset.result),
   'task-edit-message': (id, node) => openTaskMessageDialog(id, Number(node.dataset.msg) || 1),
   'check-health': () => checkHealth(),
   'refresh-campaigns': () => loadCampaigns().then(() => toast('Список рассылок обновлён')),
 };
+
+// Выпадающие меню «⋯» закрываются кликом снаружи, выбором пункта и Esc.
+document.addEventListener('click', (event) => {
+  qa('details.menu[open]').forEach((menu) => {
+    if (!menu.contains(event.target) || event.target.closest('.menu-item')) menu.open = false;
+  });
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') qa('details.menu[open]').forEach((menu) => { menu.open = false; });
+});
 
 document.addEventListener('click', (event) => {
   const routeTarget = event.target.closest('[data-route]');
@@ -70,7 +81,6 @@ export function bindEvents() {
   $('themeBtn').addEventListener('click', () => applyTheme(S.prefs.theme === 'dark' ? 'light' : 'dark'));
 
   $('schoolSearch').addEventListener('input', debounce(renderSchools, 150));
-  $('schoolsRefresh').addEventListener('click', () => loadSchools().then(() => toast('Данные школ обновлены')).catch((error) => toast(error.message, 'error')));
   $('btnAddSchool').addEventListener('click', () => ACTIONS['school-create']());
 
   $('contactsRefresh').addEventListener('click', () => loadContacts().then(() => toast('Список контактов обновлён')).catch((error) => toast(error.message, 'error')));
@@ -109,6 +119,15 @@ export function bindEvents() {
     $('contactOptOut').value = '';
     renderSchoolOptions();
     loadContacts().catch((error) => toast(error.message, 'error'));
+  });
+  qa('[data-sort-contacts]').forEach((button) => {
+    button.addEventListener('click', () => toggleContactSort(button.dataset.sortContacts));
+  });
+  $('contactRows').addEventListener('change', (event) => {
+    const select = event.target.closest('[data-contact-role]');
+    if (!select) return;
+    patchContact(Number(select.dataset.contactRole), { role: select.value })
+      .catch((error) => { toast(error.message, 'error'); renderContacts(); });
   });
   $('contactPageSize').addEventListener('change', () => {
     S.contactsUi.pageSize = Number($('contactPageSize').value);
@@ -173,7 +192,20 @@ export function bindCampaignEvents() {
     S.recipients.selected.clear();
     renderPicker();
   });
-  $('campaignPreviewBtn').addEventListener('click', previewCampaign);
+  $('btnNewCampaign').addEventListener('click', openCampaignForm);
+  $('campaignFormClose').addEventListener('click', async () => {
+    const dirty = ($('campaignName').value || '').trim() || S.recipients.selected.size;
+    const accepted = !dirty || await confirmAction('Закрыть форму', 'Введённые название, тексты и выбранные получатели будут потеряны.', { confirmText: 'Закрыть форму' });
+    if (accepted) closeCampaignForm();
+  });
+  qa('[data-cstep]').forEach((button) => {
+    button.addEventListener('click', () => setCampaignStep(Number(button.dataset.cstep)));
+  });
+  qa('[data-cnav]').forEach((button) => {
+    button.addEventListener('click', () => {
+      setCampaignStep(S.campaignsUi.formStep + (button.dataset.cnav === 'next' ? 1 : -1));
+    });
+  });
   $('campaignCreateBtn').addEventListener('click', () => createCampaign().catch((error) => toast(error.message, 'error')));
   $('campaignSearch').addEventListener('input', debounce(() => {
     S.campaignsUi.q = $('campaignSearch').value.trim();
@@ -205,6 +237,7 @@ export function bindCampaignEvents() {
 }
 
 export function bindTaskEvents() {
+  bindDetailEvents();
   $('taskBack').addEventListener('click', () => go('campaigns'));
   $('taskRefreshBtn').addEventListener('click', () => refreshTasks().then(() => toast('Статусы обновлены')).catch((error) => toast(error.message, 'error')));
   $('taskStopBtn').addEventListener('click', () => stopCampaign(S.tasksUi.campaignId).catch((error) => toast(error.message, 'error')));

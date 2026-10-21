@@ -49,6 +49,20 @@ export function applyPrefs() {
   $('pageSizeDefault').value = String(S.prefs.pageSize);
   S.contactsUi.pageSize = S.prefs.pageSize;
   $('contactPageSize').value = String(S.prefs.pageSize);
+  // Фильтры и сортировка контактов переживают перезагрузку страницы.
+  const saved = S.prefs.contacts || {};
+  Object.assign(S.contactsUi, {
+    q: saved.q || '',
+    school: saved.school || '',
+    klass: saved.klass || '',
+    role: saved.role || '',
+    optedOut: saved.optedOut || '',
+    sort: saved.sort || '',
+    dir: saved.dir === 'desc' ? 'desc' : 'asc',
+  });
+  $('contactSearch').value = S.contactsUi.q;
+  $('contactRole').value = S.contactsUi.role;
+  $('contactOptOut').value = S.contactsUi.optedOut;
   $('taskPageSize').value = String(Math.min(S.prefs.pageSize, 100));
   S.tasksUi.pageSize = Number($('taskPageSize').value);
 }

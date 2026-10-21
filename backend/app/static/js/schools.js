@@ -28,6 +28,11 @@ export function classOptions(schoolId, selectedId) {
 }
 
 export function renderSchoolOptions() {
+  // Сохранённый фильтр мог указывать на удалённую школу или класс.
+  const ui = S.contactsUi;
+  const school = S.schools.find((item) => item.id === Number(ui.school));
+  if (ui.school && !school) Object.assign(ui, { school: '', klass: '' });
+  else if (ui.klass && !(school.classes || []).some((item) => item.id === Number(ui.klass))) ui.klass = '';
   $('importSchoolSelect').innerHTML = schoolOptions(null, 'Выберите школу');
   $('contactSchool').innerHTML = schoolOptions(S.contactsUi.school, 'Все школы');
   $('contactClass').innerHTML = classOptions(S.contactsUi.school, S.contactsUi.klass);
@@ -82,7 +87,13 @@ export function toggleCollapse(element) {
   else S.collapsed.delete(key);
   applyCollapsed(block, collapsed);
   saveCollapsed();
+  updateCollapseToggles();
 }
+
+const collapseScopes = () => [
+  ['schools', $('schoolList'), $('schoolsCollapseToggle')],
+  ['picker', $('campaignPicker'), $('pickerCollapseToggle')],
+];
 
 export function setAllCollapsed(scope, collapsed) {
   const container = scope === 'picker' ? $('campaignPicker') : $('schoolList');
@@ -94,6 +105,25 @@ export function setAllCollapsed(scope, collapsed) {
     applyCollapsed(block, collapsed);
   });
   saveCollapsed();
+  updateCollapseToggles();
+}
+
+// Одна кнопка вместо пары: сворачивает, пока есть раскрытые школы, иначе разворачивает.
+export function toggleAllCollapsed(scope) {
+  const [, container] = collapseScopes().find(([name]) => name === scope);
+  const anyOpen = qa(':scope > [data-collapse]', container).some((block) => !block.classList.contains('is-collapsed'));
+  setAllCollapsed(scope, anyOpen);
+}
+
+export function updateCollapseToggles() {
+  collapseScopes().forEach(([, container, button]) => {
+    if (!container || !button) return;
+    const blocks = qa(':scope > [data-collapse]', container);
+    button.disabled = !blocks.length;
+    button.textContent = blocks.some((block) => !block.classList.contains('is-collapsed')) || !blocks.length
+      ? 'Свернуть все'
+      : 'Развернуть все';
+  });
 }
 
 export function renderSchools() {
@@ -141,6 +171,7 @@ export function renderSchools() {
     : `<div class="empty">${query ? 'По запросу ничего не найдено.' : 'Школ пока нет.'}
          <div><button type="button" class="btn primary" data-action="school-create">Добавить школу и класс</button></div>
        </div>`;
+  updateCollapseToggles();
 }
 
 export function schoolClassList(school, expandAll) {
@@ -164,7 +195,7 @@ export function schoolClassList(school, expandAll) {
         <button type="button" class="btn small danger" data-action="class-delete" data-id="${item.id}">Удалить</button>
       </div>
       <div class="collapse-body" id="classBody${item.id}"${collapsed ? ' hidden' : ''}>
-        <div class="table-wrap" style="max-height:none">
+        <div class="table-wrap table-flat">
           <table>
             <thead><tr><th>Роль</th><th>ФИО</th><th>Телефон</th><th>Действия</th></tr></thead>
             <tbody>

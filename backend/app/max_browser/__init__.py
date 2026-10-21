@@ -13,7 +13,7 @@ from .chat import (
     open_chat,
     prepare_message,
 )
-from .connection import shutdown
+from .connection import shutdown, status
 from .editor import _return_to_chat_after_rename
 from .page import (
     CHAT_BACK_ATTEMPTS,
@@ -43,4 +43,5 @@ __all__ = [
     "prepare_message",
     "rename_contact",
     "shutdown",
+    "status",
 ]

@@ -159,6 +159,30 @@ def test_missing_max_tab_is_reported(monkeypatch):
         session.close()
 
 
+def _fake_tabs(monkeypatch, payload):
+    import io
+    import json
+    import urllib.request
+
+    def fake_urlopen(url, timeout):
+        if payload is None:
+            raise OSError("connection refused")
+        return io.BytesIO(json.dumps(payload).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+
+def test_status_reports_ready_no_tab_and_offline(monkeypatch):
+    _fake_tabs(monkeypatch, [{"type": "page", "url": "https://web.max.ru/"}])
+    assert connection.status() == "ready"
+    _fake_tabs(monkeypatch, [{"type": "page", "url": "https://example.org/"}])
+    assert connection.status() == "no_tab"
+    _fake_tabs(monkeypatch, [{"type": "service_worker", "url": "https://web.max.ru/sw.js"}])
+    assert connection.status() == "no_tab"
+    _fake_tabs(monkeypatch, None)
+    assert connection.status() == "offline"
+
+
 def test_close_disconnects_and_allows_reuse(env):
     session, _, started = env
     _run(session, lambda p: None)

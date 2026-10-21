@@ -51,7 +51,7 @@ function boot() {
 
   setInterval(() => {
     if (!document.hidden) checkHealth(true);
-  }, 60000);
+  }, 20000);
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
