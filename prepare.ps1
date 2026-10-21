@@ -53,7 +53,9 @@ function Resolve-Python {
     }
 
     foreach ($candidate in $candidates) {
-        $versionArguments = @($candidate.Prefix) + @('-c', 'import sys; print("PYINFO", sys.version_info[0], sys.version_info[1], sys.executable)')
+        # Путь к интерпретатору кодируется в ASCII (unicode_escape), иначе кириллица в пути
+        # (например, имя пользователя) искажается из-за кодировки консоли Windows (OEM 866).
+        $versionArguments = @($candidate.Prefix) + @('-c', 'import sys; print(''PYINFO'', sys.version_info[0], sys.version_info[1], sys.executable.encode(''unicode_escape'').decode(''ascii''))')
         $previousErrorActionPreference = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
         $runtimeOutput = @(& $candidate.FilePath @versionArguments 2>$null)
@@ -74,8 +76,8 @@ function Resolve-Python {
         $minor = [int]$infoMatch.Groups[2].Value
         if ($major -ne 3 -or $minor -lt 10 -or $minor -gt 13) { continue }
 
-        $script:Python = $infoMatch.Groups[3].Value
-        if (-not (Test-Path -LiteralPath $script:Python)) { continue }
+        $script:Python = [regex]::Unescape($infoMatch.Groups[3].Value)
+        if (-not (Test-Path -LiteralPath $script:Python -PathType Leaf)) { continue }
         $script:PythonPrefix = @()
         $script:PythonVersion = "$major.$minor"
         Write-Host "Используется установленный Python $($script:PythonVersion): $($script:Python)"
