@@ -37,3 +37,6 @@ Desktop.ini
 node_modules/
 frontend/dist/
 frontend/node_modules/
+
+# Локальные образцы таблиц с персональными данными
+/test*.xlsx

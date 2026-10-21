@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
+
+from .message_sets import MAX_MESSAGE_LENGTH, MAX_MESSAGES_PER_ROLE
+
+MessageText = Annotated[str, StringConstraints(max_length=MAX_MESSAGE_LENGTH)]
+MessageList = Annotated[list[MessageText], Field(max_length=MAX_MESSAGES_PER_ROLE)]
 
 TaskStatus = str
 
@@ -34,6 +39,8 @@ class CampaignIn(BaseModel):
     message: str = Field(default="", max_length=4000)
     message_kr: str | None = Field(default=None, max_length=4000)
     message_rk: str | None = Field(default=None, max_length=4000)
+    messages_kr: MessageList | None = None
+    messages_rk: MessageList | None = None
     client_ids: list[int] = Field(default_factory=list)
     school_id: int | None = None
 
@@ -41,10 +48,13 @@ class CampaignIn(BaseModel):
 class CampaignMessagesIn(BaseModel):
     message_kr: str | None = Field(default=None, max_length=4000)
     message_rk: str | None = Field(default=None, max_length=4000)
+    messages_kr: MessageList | None = None
+    messages_rk: MessageList | None = None
 
 
 class TaskMessageIn(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
+    index: int = Field(default=1, ge=1, le=MAX_MESSAGES_PER_ROLE)
 
 
 class ImportConfirm(BaseModel):
@@ -92,7 +102,3 @@ class CampaignDeleteIn(BaseModel):
 
 class ClientDeleteIn(BaseModel):
     client_ids: list[int] = Field(min_length=1, max_length=500)
-
-
-class LoginIn(BaseModel):
-    password: str = Field(min_length=8)

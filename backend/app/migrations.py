@@ -37,6 +37,14 @@ MIGRATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "ALTER TABLE delivery_tasks ADD COLUMN browser_error TEXT",
         ),
     ),
+    (
+        "0005_multiple_messages",
+        (
+            "ALTER TABLE campaigns ADD COLUMN messages_kr TEXT",
+            "ALTER TABLE campaigns ADD COLUMN messages_rk TEXT",
+            "ALTER TABLE delivery_tasks ADD COLUMN messages TEXT",
+        ),
+    ),
 )
 
 

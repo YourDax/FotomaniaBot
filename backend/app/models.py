@@ -94,6 +94,9 @@ class Campaign(Base):
     message: Mapped[str] = mapped_column(Text)
     message_kr: Mapped[str | None] = mapped_column(Text, nullable=True)
     message_rk: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # JSON-списки текстов (несколько сообщений на роль); message_kr/rk — зеркало первого.
+    messages_kr: Mapped[str | None] = mapped_column(Text, nullable=True)
+    messages_rk: Mapped[str | None] = mapped_column(Text, nullable=True)
     school_id: Mapped[int | None] = mapped_column(
         ForeignKey("schools.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -103,7 +106,7 @@ class Campaign(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     stop_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    tasks: Mapped[list["DeliveryTask"]] = relationship(
+    tasks: Mapped[list[DeliveryTask]] = relationship(
         back_populates="campaign", cascade="all, delete-orphan"
     )
 
@@ -119,6 +122,8 @@ class DeliveryTask(Base):
     )
     recipient_role: Mapped[str] = mapped_column(String(10), default="KR")
     rendered_message: Mapped[str] = mapped_column(Text)
+    # JSON: [{"text", "prepared_at"}] по числу сообщений; rendered_message — первое.
+    messages: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="PENDING", index=True)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)

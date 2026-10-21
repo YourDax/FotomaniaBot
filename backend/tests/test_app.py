@@ -1,17 +1,17 @@
 import io
-
-from fastapi.testclient import TestClient
 from uuid import uuid4
 
+from fastapi.testclient import TestClient
 from openpyxl import Workbook
+
 from app.main import app
-from app import main
 from app.max_browser import (
     MaxBrowserError,
     PreparationResult,
     _is_phone_not_found_text,
     _max_phone_digits,
 )
+from app.routers import tasks as tasks_router
 
 client = TestClient(app)
 
@@ -265,20 +265,6 @@ def test_school_contacts_import_resolves_numeric_school_id():
     ]
     assert len(contacts) == 2
 
-
-def test_auth_blocks_without_credentials_when_password_configured():
-    password = f"secret-{uuid4().hex}"
-    assert client.post("/api/auth/setup", json={"password": password}).status_code == 200
-    try:
-        assert client.get("/api/clients").status_code == 401
-        ok = client.get("/api/clients", auth=("operator", password))
-        assert ok.status_code == 200
-    finally:
-        with main.db() as session:
-            setting = session.get(main.Setting, "password_hash")
-            if setting is not None:
-                session.delete(setting)
-                session.commit()
 
 
 def test_csv_import_and_settings():
@@ -623,7 +609,7 @@ def test_prepare_max_task_persists_verified_browser_draft(monkeypatch):
     client.post(f"/api/campaigns/{campaign['id']}/start")
 
     monkeypatch.setattr(
-        main,
+        tasks_router,
         "prepare_message",
         lambda name, identity, message, expected_name=None: PreparationResult(
             "DRAFT_PREPARED", "https://max.ru/chats/test", name, message
@@ -661,9 +647,9 @@ def test_open_max_task_opens_chat_without_inserting_text(monkeypatch):
     ).json()
     task = client.get(f"/api/campaigns/{campaign['id']}/tasks").json()[0]
     monkeypatch.setattr(
-        main,
+        tasks_router,
         "open_chat",
-        lambda name, identity: PreparationResult(
+        lambda name, identity, expected_name=None: PreparationResult(
             "CHAT_OPENED", "https://web.max.ru/chat", name, ""
         ),
     )
@@ -687,10 +673,10 @@ def test_open_max_task_not_found_is_a_status(monkeypatch):
     ).json()
     task = client.get(f"/api/campaigns/{campaign['id']}/tasks").json()[0]
 
-    def fail_open(name, identity):
+    def fail_open(name, identity, expected_name=None):
         raise MaxBrowserError("Контакт не найден в MAX по указанному номеру телефона.")
 
-    monkeypatch.setattr(main, "open_chat", fail_open)
+    monkeypatch.setattr(tasks_router, "open_chat", fail_open)
     response = client.post(f"/api/tasks/{task['id']}/open-max")
     assert response.status_code == 502
     saved = client.get(f"/api/campaigns/{campaign['id']}/tasks").json()[0]
@@ -715,7 +701,7 @@ def test_prepare_max_contact_not_found_is_a_status(monkeypatch):
     def fail_prepare(name, identity, message, expected_name=None):
         raise MaxBrowserError("Контакт не найден в MAX по указанному номеру телефона.")
 
-    monkeypatch.setattr(main, "prepare_message", fail_prepare)
+    monkeypatch.setattr(tasks_router, "prepare_message", fail_prepare)
     response = client.post(f"/api/tasks/{task['id']}/prepare-max")
     assert response.status_code == 502
     saved = client.get(f"/api/campaigns/{campaign['id']}/tasks").json()[0]

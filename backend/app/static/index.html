@@ -53,7 +53,6 @@
         <div class="topbar-tools">
           <span class="pill" id="healthPill"><span class="dot"></span>проверка</span>
           <button type="button" class="btn icon" id="themeBtn" aria-label="Переключить тему">◐</button>
-          <button type="button" class="btn ghost" id="authBtn">Войти</button>
         </div>
       </header>
 
@@ -262,19 +261,10 @@
                 <input id="campaignDescription" placeholder="Комментарий для себя" maxlength="200">
               </div>
             </div>
+            <p class="muted" style="margin:12px 0 0">Для каждой роли можно подготовить от 1 до 5 сообщений: у каждого получателя появится своя кнопка «Подготовить в MAX» на каждое сообщение. Нужен текст хотя бы для одной роли.</p>
             <div class="grid-2" style="margin-top:12px">
-              <div class="field">
-                <span>Текст для КР <span class="req">*</span></span>
-                <textarea id="messageKR" placeholder="Здравствуйте, {name}! Напоминаю о собрании 15 сентября в 18:00." maxlength="4000"></textarea>
-                <select id="templateSelectKR" aria-label="Сохранённые тексты для КР" style="margin-top:6px"><option value="">Сохранённые тексты…</option></select>
-                <small class="muted"><span id="msgCounterKR">0</span> / 4000 символов · доступна подстановка {name}</small>
-              </div>
-              <div class="field">
-                <span>Текст для РК <span class="req">*</span></span>
-                <textarea id="messageRK" placeholder="Здравствуйте, {name}! Просьба передать информацию родителям класса." maxlength="4000"></textarea>
-                <select id="templateSelectRK" aria-label="Сохранённые тексты для РК" style="margin-top:6px"><option value="">Сохранённые тексты…</option></select>
-                <small class="muted"><span id="msgCounterRK">0</span> / 4000 символов · доступна подстановка {name}</small>
-              </div>
+              <div class="msgset" id="msgsetKR"></div>
+              <div class="msgset" id="msgsetRK"></div>
             </div>
             <div class="card-head" style="margin-top:14px">
               <h3>Получатели</h3><span class="spacer"></span>
@@ -354,7 +344,7 @@
               <label class="check muted"><input type="checkbox" id="autoRefreshToggle" checked> автообновление</label>
               <button type="button" class="btn small ghost" id="taskRefreshBtn">Обновить</button>
               <a class="btn small ghost" id="taskExportLink" href="#" target="_blank" rel="noopener">Скачать CSV</a>
-              <button type="button" class="btn small ghost" id="taskEditMessagesBtn" title="Изменить тексты КР и РК для всех необработанных заданий">Изменить тексты</button>
+              <button type="button" class="btn small ghost" id="taskEditMessagesBtn" title="Изменить тексты КР и РК (и их количество) для всех необработанных заданий">Изменить тексты</button>
               <button type="button" class="btn small danger" id="taskStopBtn">Остановить рассылку</button>
             </div>
             <dl class="kv" style="margin-bottom:12px">
@@ -371,6 +361,9 @@
             <div class="chips" id="taskChips" style="margin-top:12px"></div>
 
             <div class="row" style="margin:14px 0">
+              <label class="inline-field" id="taskBulkMessageWrap" hidden>Сообщение
+                <select id="taskBulkMessage" aria-label="Номер сообщения для массовой подготовки"></select>
+              </label>
               <button type="button" class="btn primary" id="taskBulkPrepare">Создать черновики для всех</button>
               <button type="button" class="btn ghost" id="taskBulkOpen">Открыть чаты по списку</button>
               <span class="pill" id="taskSelectedInfo" hidden>Задание выбрано</span>
@@ -451,19 +444,6 @@
                 <button type="button" class="btn ghost" id="settingsCheckHealth">Проверить сервер</button>
               </div>
             </div>
-
-            <div class="card">
-              <div class="card-head"><h2>Доступ оператора</h2></div>
-              <p class="muted">Пароль хранится в базе в виде хеша. Сессия действует до закрытия вкладки — пароль не сохраняется на диске.</p>
-              <dl class="kv">
-                <dt>Статус сессии</dt><dd id="passwordStatus">—</dd>
-              </dl>
-              <div class="row" style="margin-top:12px">
-                <button type="button" class="btn primary" id="passwordSetup">Задать пароль оператора</button>
-                <button type="button" class="btn ghost" id="logoutBtn">Выйти</button>
-              </div>
-              <p class="muted" style="margin-top:10px">Пароль можно задать только один раз. Если пароль уже настроен, используйте кнопку «Войти» в шапке.</p>
-            </div>
           </div>
 
           <div class="card">
@@ -522,6 +502,6 @@
     <div class="modal-foot" id="modalFoot"></div>
   </dialog>
 
-  <script src="/static/app.js?v=20261020-campaign-templates" defer></script>
+  <script src="/static/app.js?v=20261021-multi-messages" defer></script>
 </body>
 </html>

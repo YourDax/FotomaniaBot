@@ -6,8 +6,9 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from app import main
+from app.db import db
 from app.main import app
+from app.models import School
 
 client = TestClient(app)
 
@@ -116,38 +117,12 @@ def test_reports_export_missing_campaign_is_404():
     assert client.get("/api/reports/999999/export").status_code == 404
 
 
-def test_auth_accepts_configured_credentials_and_rejects_wrong_password():
-    password = f"secret-{uuid4().hex}"
-    assert client.post("/api/auth/setup", json={"password": password}).status_code == 200
-    try:
-        authorized = client.get("/api/clients", auth=("operator", password))
-        assert authorized.status_code == 200
-        assert client.get("/api/clients", auth=("operator", "wrong-password")).status_code == 401
-    finally:
-        with main.db() as session:
-            setting = session.get(main.Setting, "password_hash")
-            if setting is not None:
-                session.delete(setting)
-                session.commit()
-
-
-def test_auth_setup_is_rejected_when_password_already_exists():
-    password = f"secret-{uuid4().hex}"
-    assert client.post("/api/auth/setup", json={"password": password}).status_code == 200
-    try:
-        assert client.post("/api/auth/setup", json={"password": password}).status_code == 409
-    finally:
-        with main.db() as session:
-            setting = session.get(main.Setting, "password_hash")
-            if setting is not None:
-                session.delete(setting)
-                session.commit()
 
 
 def test_school_class_creation_is_idempotent_per_school():
     school_id, _ = _make_school_class()
-    with main.db() as session:
-        school = session.get(main.School, school_id)
+    with db() as session:
+        school = session.get(School, school_id)
         assert school is not None
         name = school.name
     first = client.post("/api/classes", json={"school_name": name, "class_name": "7В"}).json()

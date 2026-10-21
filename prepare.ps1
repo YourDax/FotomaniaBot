@@ -156,22 +156,21 @@ function Start-Application {
 
     Write-Host 'Запуск локального приложения...'
     $startArguments = @($script:PythonPrefix) + @('-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8000')
-    $backendStdout = Join-Path $script:RuntimeDir 'backend.stdout.log'
-    $backendStderr = Join-Path $script:RuntimeDir 'backend.stderr.log'
-    $process = Start-Process -FilePath $script:Python `
-        -ArgumentList $startArguments `
+    # Backend запускается в собственном окне консоли, чтобы сообщения о работе
+    # (запуск, запросы, ошибки) были видны оператору; полный журнал также пишется
+    # в backend\logs\session.log. При аварийном завершении окно остаётся открытым.
+    $quotedPython = '"' + $script:Python + '"'
+    $commandLine = '/d /s /c "title MAX Rassylki - backend && ' + $quotedPython +
+        ' ' + ($startArguments -join ' ') + ' || pause"'
+    $process = Start-Process -FilePath 'cmd.exe' `
+        -ArgumentList $commandLine `
         -WorkingDirectory (Join-Path $script:Root 'backend') `
-        -RedirectStandardOutput $backendStdout `
-        -RedirectStandardError $backendStderr `
         -PassThru
 
     for ($attempt = 0; $attempt -lt 45; $attempt++) {
         Start-Sleep -Seconds 1
         if ($process.HasExited) {
-            $errorDetails = if (Test-Path -LiteralPath $backendStderr) {
-                (Get-Content -LiteralPath $backendStderr -Tail 30 -ErrorAction SilentlyContinue) -join [Environment]::NewLine
-            } else { '' }
-            throw "Backend завершился во время запуска (код $($process.ExitCode)). Вывод backend: $backendStderr`n$errorDetails"
+            throw "Backend завершился во время запуска (код $($process.ExitCode)). Подробности в окне backend и в backend\logs\session.log."
         }
         try {
             $response = Invoke-WebRequest -UseBasicParsing -Uri $healthUrl -TimeoutSec 2
@@ -187,8 +186,8 @@ function Start-Application {
         }
     }
 
-    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-    throw 'Backend не ответил за 45 секунд. Проверьте backend\logs\session.log.'
+    & taskkill.exe /PID $process.Id /T /F | Out-Null
+    throw 'Backend не ответил за 45 секунд. Смотрите сообщения в окне backend и в backend\logs\session.log.'
 }
 
 try {

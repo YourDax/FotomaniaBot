@@ -5,8 +5,8 @@ from typing import Any
 import pytest
 
 from app.max_browser import (
-    _open_chat_is_for_contact,
     _PROFILE_BUTTON_PREFIX,
+    _open_chat_is_for_contact,
     normalize_contact_name,
 )
 
