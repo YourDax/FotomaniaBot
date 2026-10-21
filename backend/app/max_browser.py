@@ -630,8 +630,10 @@ def prepare_message(
         ) from exc
 
 
-def open_chat(client_name: str, identity: str) -> PreparationResult:
-    return prepare_message(client_name, identity, None)
+def open_chat(
+    client_name: str, identity: str, expected_name: str | None = None
+) -> PreparationResult:
+    return prepare_message(client_name, identity, None, expected_name=expected_name)
 
 
 CHAT_EDITOR_SELECTORS: list[str] = [

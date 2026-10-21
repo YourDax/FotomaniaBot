@@ -1182,8 +1182,20 @@ def open_max_task(task_id: int, _: bool = Depends(require_auth)) -> dict[str, An
         task, contact = _task_and_contact(session, task_id)
         client_name = contact.name
         identity = contact.phone or _contact_identity(contact)
+        school = session.get(School, contact.school_id) if contact.school_id else None
+        school_class = session.get(SchoolClass, contact.class_id) if contact.class_id else None
+        try:
+            expected_name: str | None = contact_first_name(
+                task.recipient_role,
+                school.name if school else "",
+                school_class.name if school_class else "",
+                contact.name,
+                now().astimezone().year,
+            )
+        except ValueError:
+            expected_name = None
     try:
-        result = open_chat(client_name, identity)
+        result = open_chat(client_name, identity, expected_name=expected_name)
     except MaxBrowserError as exc:
         with session_scope() as session:
             failed = session.get(DeliveryTask, task_id)
