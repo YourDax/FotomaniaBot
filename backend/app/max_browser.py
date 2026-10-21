@@ -359,7 +359,113 @@ def _insert_and_verify_message(page: Any, editor: Any, message: str) -> str:
     )
 
 
-def prepare_message(client_name: str, identity: str, message: str | None) -> PreparationResult:
+_NAME_SPACE_CHARS = re.compile(r"[\s\u00a0\u200b\u200c\u200d\u2060\ufeff]+")
+_NAME_DASHES = re.compile(r"[\u2010\u2011\u2012\u2013\u2014\u2212]")
+_CHAT_HEADER_TITLE_SELECTORS: list[str] = [
+    # Разметка шапки открытого чата: span.title > span.name > span.text внутри content--subtitle.
+    "div[class*='content--subtitle'] span.title span.name span.text",
+    "span.title span.name span.text",
+    "[class*='header'] h2[class*='title']",
+    "[class*='header'] [class*='title'] [class*='name']",
+    "[class*='header'] button[aria-label^='Открыть профиль'] [class*='name']",
+    "[class*='header'] button[aria-label^='Открыть профиль'] [class*='title']",
+]
+_PROFILE_BUTTON_PREFIX = "Открыть профиль "
+
+
+def normalize_contact_name(value: str) -> str:
+    """Comparable form of a contact name: case, «ё», dashes and whitespace are ignored."""
+    text = _NAME_DASHES.sub("-", value.replace("\u00a0", " "))
+    text = _NAME_SPACE_CHARS.sub(" ", text).strip().casefold()
+    return text.replace("ё", "е")
+
+
+def _read_open_chat_title(page: Any) -> str | None:
+    """Return the contact name shown in the open chat header, or None when it is unknown.
+
+    Only the header title is read. Status lines («Был(-а) недавно», «В сети») are never
+    part of it, and a truncated title (ends with «…») is treated as unknown.
+    """
+    for selector in _CHAT_HEADER_TITLE_SELECTORS:
+        locator = page.locator(selector)
+        try:
+            count = min(locator.count(), 5)
+        except Exception:
+            continue
+        for index in range(count):
+            candidate = locator.nth(index)
+            try:
+                if not candidate.is_visible(timeout=200):
+                    continue
+                text = candidate.inner_text(timeout=300)
+            except Exception:
+                continue
+            text = _NAME_SPACE_CHARS.sub(" ", text).strip()
+            if text and not text.endswith(("...", "…")):
+                return text
+    try:
+        profile_buttons = page.locator("button[aria-label^='Открыть профиль']")
+        if profile_buttons.count() > 0:
+            label = profile_buttons.first.get_attribute("aria-label", timeout=300) or ""
+            if label.startswith(_PROFILE_BUTTON_PREFIX):
+                title = label[len(_PROFILE_BUTTON_PREFIX):].strip()
+                if title and not title.endswith(("...", "…")):
+                    return title
+    except Exception:
+        log.info("MAX: не удалось прочитать имя из кнопки профиля в шапке")
+    return None
+
+
+def _open_chat_is_for_contact(page: Any, expected_name: str | None) -> bool:
+    """True only when the chat already open is exactly the contact we need.
+
+    Any failure (no header, changed markup, empty or truncated title, page error)
+    means «не совпало»: the caller then falls back to the phone search.
+    """
+    if not expected_name or not normalize_contact_name(expected_name):
+        return False
+    try:
+        title = _read_open_chat_title(page)
+    except Exception:
+        log.exception("MAX: ошибка чтения шапки чата, ищу контакт по номеру")
+        return False
+    if title is None:
+        log.info("MAX: имя в шапке открытого чата не определено, ищу контакт по номеру")
+        return False
+    matched = normalize_contact_name(title) == normalize_contact_name(expected_name)
+    log.info("MAX: открытый чат «%s», ожидается «%s», совпадение=%s", title, expected_name, matched)
+    return matched
+
+
+def _prepare_draft_in_open_chat(
+    page: Any, client_name: str, message: str | None
+) -> PreparationResult | None:
+    """Use the chat that is already open. Returns None when the editor is not reachable."""
+    if _first_visible_locator(page, [page.locator(OVERLAY_BACK_SELECTOR)]) is not None:
+        log.info("MAX: поверх чата открыт оверлей, закрываю его перед вставкой")
+        try:
+            _return_to_chat_after_rename(page)
+        except MaxBrowserError:
+            return None
+    editor = _open_chat_editor(page)
+    if editor is None:
+        return None
+    if message is None:
+        return PreparationResult(
+            status="CHAT_OPENED", page_url=page.url, client_name=client_name, verified_text=""
+        )
+    actual = _insert_and_verify_message(page, editor, message)
+    return PreparationResult(
+        status="DRAFT_PREPARED", page_url=page.url, client_name=client_name, verified_text=actual
+    )
+
+
+def prepare_message(
+    client_name: str,
+    identity: str,
+    message: str | None,
+    expected_name: str | None = None,
+) -> PreparationResult:
     """Open a matching MAX chat and put a verified draft in its editor.
 
     This deliberately never invokes the send control. The browser must already
@@ -453,6 +559,11 @@ def prepare_message(client_name: str, identity: str, message: str | None) -> Pre
                 lambda error: log.error("MAX browser.pageerror %s", error),
             )
 
+            if _open_chat_is_for_contact(page, expected_name):
+                prepared = _prepare_draft_in_open_chat(page, client_name, message)
+                if prepared is not None:
+                    log.info("MAX: черновик подготовлен в уже открытом чате, поиск по номеру не нужен")
+                    return prepared
             _return_to_main_screen(page)
             search = _open_phone_search(page)
             phone_digits = _max_phone_digits(identity)

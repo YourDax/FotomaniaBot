@@ -1138,8 +1138,20 @@ def prepare_max_task(task_id: int, _: bool = Depends(require_auth)) -> dict[str,
         client_name = contact.name
         identity = contact.phone
         message = task.rendered_message
+        school = session.get(School, contact.school_id) if contact.school_id else None
+        school_class = session.get(SchoolClass, contact.class_id) if contact.class_id else None
+        try:
+            expected_name: str | None = contact_first_name(
+                task.recipient_role,
+                school.name if school else "",
+                school_class.name if school_class else "",
+                contact.name,
+                now().astimezone().year,
+            )
+        except ValueError:
+            expected_name = None
     try:
-        result = prepare_message(client_name, identity, message)
+        result = prepare_message(client_name, identity, message, expected_name=expected_name)
     except MaxBrowserError as exc:
         with session_scope() as session:
             failed = session.get(DeliveryTask, task_id)

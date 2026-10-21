@@ -625,7 +625,7 @@ def test_prepare_max_task_persists_verified_browser_draft(monkeypatch):
     monkeypatch.setattr(
         main,
         "prepare_message",
-        lambda name, identity, message: PreparationResult(
+        lambda name, identity, message, expected_name=None: PreparationResult(
             "DRAFT_PREPARED", "https://max.ru/chats/test", name, message
         ),
     )
@@ -712,7 +712,7 @@ def test_prepare_max_contact_not_found_is_a_status(monkeypatch):
     task = client.get(f"/api/campaigns/{campaign['id']}/tasks").json()[0]
     client.post(f"/api/campaigns/{campaign['id']}/start")
 
-    def fail_prepare(name, identity, message):
+    def fail_prepare(name, identity, message, expected_name=None):
         raise MaxBrowserError("Контакт не найден в MAX по указанному номеру телефона.")
 
     monkeypatch.setattr(main, "prepare_message", fail_prepare)
