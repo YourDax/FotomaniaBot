@@ -65,6 +65,35 @@ def test_exact_header_name_matches() -> None:
     assert _open_chat_is_for_contact(page, EXPECTED) is True
 
 
+def test_attribute_order_does_not_matter() -> None:
+    page = _page(f"{_PROFILE_BUTTON_PREFIX}КР 1м Под_18 - 2026 Ольга Юрьевна")
+    assert _open_chat_is_for_contact(page, "КР Под_18 1м - 2026 Ольга Юрьевна") is True
+    page = _page(f"{_PROFILE_BUTTON_PREFIX}2026 Юрьевна КР Ольга 1м Под_18")
+    assert _open_chat_is_for_contact(page, "КР Под_18 1м - 2026 Ольга Юрьевна") is True
+
+
+def test_missing_or_extra_attribute_does_not_match() -> None:
+    expected = "КР Под_18 1м - 2026 Ольга Юрьевна"
+    assert (
+        _open_chat_is_for_contact(
+            _page(f"{_PROFILE_BUTTON_PREFIX}КР 1м - 2026 Ольга Юрьевна"), expected
+        )
+        is False
+    )
+    assert (
+        _open_chat_is_for_contact(
+            _page(f"{_PROFILE_BUTTON_PREFIX}КР Под_18 1м - 2026 Ольга Юрьевна Х"), expected
+        )
+        is False
+    )
+    assert (
+        _open_chat_is_for_contact(
+            _page(f"{_PROFILE_BUTTON_PREFIX}РК Под_18 1м - 2026 Ольга Юрьевна"), expected
+        )
+        is False
+    )
+
+
 def test_partial_name_does_not_match() -> None:
     page = _page(f"{_PROFILE_BUTTON_PREFIX}РК тест 5в - 2026 Амалия")
     assert _open_chat_is_for_contact(page, EXPECTED) is False

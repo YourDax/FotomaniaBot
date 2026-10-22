@@ -51,6 +51,17 @@ def normalize_contact_name(value: str) -> str:
     return text.replace("ё", "е")
 
 
+def _name_tokens(value: str) -> list[str]:
+    """Words of a contact name in sorted order; stand-alone dashes are separators, not words."""
+    return sorted(token for token in normalize_contact_name(value).split() if token.strip("-"))
+
+
+def contact_names_match(title: str, expected: str) -> bool:
+    """Same set of words in any order: «КР Под_18 1м - 2026 Ольга» == «КР 1м Под_18 - 2026 Ольга»."""
+    tokens = _name_tokens(expected)
+    return bool(tokens) and tokens == _name_tokens(title)
+
+
 def _read_open_chat_title(page: Any) -> str | None:
     """Return the contact name shown in the open chat header, or None when it is unknown.
 
@@ -103,7 +114,7 @@ def _open_chat_is_for_contact(page: Any, expected_name: str | None) -> bool:
     if title is None:
         log.info("MAX: имя в шапке открытого чата не определено, ищу контакт по номеру")
         return False
-    matched = normalize_contact_name(title) == normalize_contact_name(expected_name)
+    matched = contact_names_match(title, expected_name)
     log.info("MAX: открытый чат «%s», ожидается «%s», совпадение=%s", title, expected_name, matched)
     return matched
 
