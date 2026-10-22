@@ -54,6 +54,17 @@ def status() -> str:
     return "ready" if has_tab else "no_tab"
 
 
+def _cdp_alive(url: str) -> bool:
+    """Отвечает ли браузер на порту отладки: Playwright замечает закрытие браузера не сразу."""
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(f"{url.rstrip('/')}/json/version", timeout=1):
+            return True
+    except Exception:
+        return False
+
+
 def _ensure_cdp_endpoint(playwright: Any, cdp_url: str) -> None:
     """Start a persistent, non-authenticating Chromium when CDP is absent."""
     import urllib.request
@@ -173,6 +184,7 @@ class MaxSession:
         timeout_message: str,
         unexpected_message: str,
     ) -> T:
+        reused = self._browser is not None
         try:
             return job(self._acquire_page())
         except MaxBrowserError:
@@ -184,6 +196,29 @@ class MaxSession:
         except Exception as exc:
             log.exception("MAX %s unexpected error", label)
             self._reset()  # состояние браузера неизвестно: следующий вызов подключится заново
+            if reused and type(exc).__name__ == "TargetClosedError":
+                # Браузер закрыли после прошлой операции: подключаемся заново (при необходимости
+                # запустится новый браузер) и повторяем один раз.
+                log.warning("MAX %s: соединение устарело, подключаюсь заново", label)
+                return self._execute_fresh(job, label, timeout_message, unexpected_message)
+            raise MaxBrowserError(unexpected_message) from exc
+
+    def _execute_fresh(
+        self,
+        job: Callable[[Any], T],
+        label: str,
+        timeout_message: str,
+        unexpected_message: str,
+    ) -> T:
+        try:
+            return job(self._acquire_page())
+        except MaxBrowserError:
+            raise
+        except _timeout_errors() as exc:
+            raise MaxBrowserError(timeout_message) from exc
+        except Exception as exc:
+            log.exception("MAX %s unexpected error after reconnect", label)
+            self._reset()
             raise MaxBrowserError(unexpected_message) from exc
 
     def _reset(self) -> None:
@@ -200,7 +235,7 @@ class MaxSession:
     def _acquire_page(self) -> Any:
         url = cdp_url()
         if self._browser is not None and (
-            url != self._browser_url or not self._browser.is_connected()
+            url != self._browser_url or not self._browser.is_connected() or not _cdp_alive(url)
         ):
             log.info("MAX: соединение с браузером потеряно или изменено, подключаюсь заново")
             self._reset()

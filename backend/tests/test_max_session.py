@@ -83,6 +83,7 @@ def env(monkeypatch):
 
     monkeypatch.setattr(connection, "_start_playwright", start)
     monkeypatch.setattr(connection, "_ensure_cdp_endpoint", lambda playwright, url: None)
+    monkeypatch.setattr(connection, "_cdp_alive", lambda url: True)
     session = MaxSession()
     yield session, page, started
     session.close()
@@ -181,6 +182,47 @@ def test_status_reports_ready_no_tab_and_offline(monkeypatch):
     assert connection.status() == "no_tab"
     _fake_tabs(monkeypatch, None)
     assert connection.status() == "offline"
+
+
+def test_closed_browser_is_detected_before_the_next_run(env, monkeypatch):
+    session, _, started = env
+    _run(session, lambda p: None)
+    # браузер закрыт, а Playwright ещё не заметил
+    monkeypatch.setattr(connection, "_cdp_alive", lambda url: False)
+    _run(session, lambda p: None)
+    assert started[0].stopped and len(started) == 2
+
+
+class TargetClosedError(Exception):
+    """Имя совпадает с исключением Playwright о закрытом браузере."""
+
+
+def test_stale_connection_error_is_retried_once_with_a_new_connection(env):
+    session, _, started = env
+    _run(session, lambda p: None)
+    calls = []
+
+    def job(page):
+        calls.append(1)
+        if len(calls) == 1:
+            raise TargetClosedError("Target page, context or browser has been closed")
+        return "ok"
+
+    assert _run(session, job) == "ok"
+    assert len(calls) == 2 and len(started) == 2
+
+
+def test_closed_error_on_a_fresh_connection_is_not_retried(env):
+    session, _, started = env
+    calls = []
+
+    def job(page):
+        calls.append(1)
+        raise TargetClosedError("closed")
+
+    with pytest.raises(MaxBrowserError, match="сбой"):
+        _run(session, job)
+    assert len(calls) == 1
 
 
 def test_close_disconnects_and_allows_reuse(env):
