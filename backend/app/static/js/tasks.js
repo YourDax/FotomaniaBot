@@ -329,6 +329,10 @@ export function selectTask(id) {
   S.tasksUi.selectedId = id;
   paintTaskRows();
   renderTaskDetail();
+  // На узком экране карточка лежит под таблицей: подводим к ней, чтобы не искать вручную.
+  if (window.matchMedia('(max-width: 1060px)').matches) {
+    $('taskDetail').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 export async function updateTaskStatus(taskId, status) {

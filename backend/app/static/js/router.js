@@ -84,7 +84,7 @@ export function renderHealth() {
   const [maxTone, maxLabel, maxHint] = (data && MAX_STATES[data.max]) || ['', 'MAX: —', 'состояние неизвестно'];
   const maxPill = $('maxPill');
   maxPill.className = 'pill ' + maxTone;
-  maxPill.innerHTML = `<span class="dot"></span>${maxLabel}`;
+  maxPill.innerHTML = `<span class="dot"></span><span class="pill-text">${maxLabel}</span>`;
   maxPill.title = maxHint;
   $('homeStatusMax').textContent = maxHint;
   $('settingsMax').textContent = maxHint;

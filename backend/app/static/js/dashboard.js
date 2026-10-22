@@ -1,6 +1,6 @@
 /* Обзор и настройки интерфейса. */
 import { loadCampaigns } from './campaigns.js';
-import { $, S, savePrefs } from './core.js';
+import { $, qa, S, savePrefs } from './core.js';
 import { checkHealth } from './router.js';
 import { loadSchools } from './schools.js';
 
@@ -42,8 +42,34 @@ export function applyTheme(theme) {
   savePrefs();
 }
 
+// Меню слева: выбор пользователя запоминается; пока выбора нет, на экранах уже 1180 px оно свёрнуто.
+const AUTO_COLLAPSE_BELOW = 1180;
+
+export function applySidebar() {
+  const stored = S.prefs.sidebarCollapsed;
+  const collapsed = typeof stored === 'boolean' ? stored : window.innerWidth < AUTO_COLLAPSE_BELOW;
+  document.querySelector('.app').classList.toggle('sidebar-collapsed', collapsed);
+  const toggle = $('sidebarToggle');
+  const label = collapsed ? 'Развернуть меню' : 'Свернуть меню';
+  toggle.setAttribute('aria-expanded', String(!collapsed));
+  toggle.setAttribute('aria-label', label);
+  toggle.title = label;
+  // В свёрнутом виде подписи пунктов видны только во всплывающих подсказках.
+  qa('.nav button').forEach((button) => {
+    if (collapsed) button.title = button.querySelector('.nav-label').textContent;
+    else button.removeAttribute('title');
+  });
+}
+
+export function toggleSidebarCollapsed() {
+  S.prefs.sidebarCollapsed = !document.querySelector('.app').classList.contains('sidebar-collapsed');
+  savePrefs();
+  applySidebar();
+}
+
 export function applyPrefs() {
   applyTheme(S.prefs.theme);
+  applySidebar();
   S.collapsed = new Set(Array.isArray(S.prefs.collapsed) ? S.prefs.collapsed : []);
   $('refreshInterval').value = String(S.prefs.refreshMs);
   $('pageSizeDefault').value = String(S.prefs.pageSize);

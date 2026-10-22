@@ -120,11 +120,11 @@ p { margin: 8px 0; }
 }
 .nav button.active .nav-count { background: rgba(255, 255, 255, .28); }
 .nav-icon { width: 18px; height: 18px; flex: none; }
-.nav-icon, .icon {
+.nav-icon, .svg-icon {
   fill: none; stroke: currentColor; stroke-width: 1.8;
   stroke-linecap: round; stroke-linejoin: round;
 }
-.icon { width: 18px; height: 18px; display: block; }
+.svg-icon { width: 18px; height: 18px; display: block; }
 
 .sidebar-foot {
   margin-top: auto; display: flex; flex-direction: column; gap: 8px;
@@ -146,7 +146,7 @@ p { margin: 8px 0; }
 .topbar h1 { margin: 0; }
 .topbar-tools { display: flex; align-items: center; gap: 8px; }
 
-.container { padding: 22px 26px 60px; width: min(1320px, 100%); }
+.container { padding: 22px 26px 60px; width: min(1320px, 100%); margin-inline: auto; }
 
 .pill {
   display: inline-flex; align-items: center; gap: 6px;
@@ -173,7 +173,7 @@ p { margin: 8px 0; }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .row > .grow { flex: 1; min-width: 0; }
 .row.end { justify-content: flex-end; }
-.stack { display: grid; gap: 10px; }
+.stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .split { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 
@@ -475,13 +475,22 @@ th[aria-sort="descending"] .th-sort::after { content: " \25BC"; font-size: 9px; 
   table.cards thead { display: none; }
   table.cards, table.cards tbody, table.cards tr, table.cards td { display: block; width: 100%; }
   table.cards tr { border-bottom: 1px solid var(--line-strong); padding: 6px 0; }
-  table.cards td { border: 0; padding: 4px 10px; display: flex; gap: 10px; align-items: baseline; }
+  table.cards td { border: 0; padding: 4px 10px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
   table.cards td::before {
     content: attr(data-label); flex: 0 0 92px; font-size: 11.5px; color: var(--muted);
     text-transform: uppercase; letter-spacing: .02em;
   }
   table.cards td[data-label=""]::before, table.cards td.empty::before { display: none; }
   table.cards td.empty { display: block; }
+  /* Строки уже в карточках: внутренняя прокрутка таблицы не нужна, прокручивается страница */
+  .table-wrap:has(> table.cards) { max-height: none; overflow: visible; border: 0; background: none; }
+  table.cards tr {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm);
+    margin-bottom: 8px; padding: 6px 0;
+  }
+  .picker { max-height: 55vh; }
+  .card { padding: 14px; }
+  .sticky-actions .btn { flex: 1 1 auto; }
 }
 
 @media (min-width: 901px) { .menu-btn { display: none; } }
@@ -490,7 +499,9 @@ th[aria-sort="descending"] .th-sort::after { content: " \25BC"; font-size: 9px; 
   .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kv { grid-template-columns: 1fr; }
   .kv dt { margin-top: 6px; }
-  .topbar-tools .pill { display: none; }
+  #healthPill, #viewHint { display: none; }
+  .topbar-tools { gap: 6px; }
+  .topbar-tools .pill { padding: 4px 9px; font-size: 11.5px; }
 }
 
 @media print {
@@ -513,3 +524,45 @@ th[aria-sort="descending"] .th-sort::after { content: " \25BC"; font-size: 9px; 
 .inline-input { width: 150px; min-height: 30px; padding: 3px 6px; font-size: 13px; }
 td .task-actions { min-width: 190px; }
 .task-actions .btn { white-space: nowrap; }
+
+/* Свёрнутое меню слева (только на широких экранах; на узких меню — выдвижная панель) */
+.sidebar-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; }
+.logo-mini { display: none; }
+.sidebar-toggle {
+  display: none; flex: none; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 8px;
+  background: rgba(255, 255, 255, .08); color: var(--sidebar-text); cursor: pointer;
+  align-items: center; justify-content: center;
+}
+.sidebar-toggle:hover { background: rgba(255, 255, 255, .16); color: #fff; }
+.sidebar-toggle:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
+.sidebar-toggle .svg-icon { transition: transform .2s ease; }
+
+@media (min-width: 901px) {
+  .sidebar-toggle { display: inline-flex; }
+  .app { transition: grid-template-columns .2s ease; }
+  .app.sidebar-collapsed { grid-template-columns: 68px minmax(0, 1fr); }
+  .sidebar-collapsed .sidebar { padding: 20px 8px 16px; align-items: center; }
+  .sidebar-collapsed .sidebar-head { flex-direction: column; align-items: center; gap: 12px; }
+  .sidebar-collapsed .logo { padding: 0; }
+  .sidebar-collapsed .logo-full, .sidebar-collapsed .nav-label, .sidebar-collapsed .nav-count,
+  .sidebar-collapsed .sidebar .hint { display: none; }
+  .sidebar-collapsed .logo-mini { display: block; font-size: 13px; letter-spacing: .04em; }
+  .sidebar-collapsed .sidebar-toggle .svg-icon { transform: rotate(180deg); }
+  .sidebar-collapsed .nav { width: 100%; }
+  .sidebar-collapsed .nav button { justify-content: center; padding: 10px 0; }
+  .sidebar-collapsed .sidebar-foot { align-items: center; }
+  .sidebar-collapsed #sideHealthPill { font-size: 0; gap: 0; padding: 6px; }
+}
+
+.topbar h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 460px) {
+  /* Остаётся цветная точка; подробности — во всплывающей подсказке и на «Обзоре» */
+  #maxPill .pill-text { display: none; }
+  #maxPill { padding: 8px; }
+}
+
+/* Планшет: карточки строк в две колонки, чтобы не вытягивать страницу */
+@media (min-width: 621px) and (max-width: 900px) {
+  table.cards tbody { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  table.cards tr { margin-bottom: 0; }
+}

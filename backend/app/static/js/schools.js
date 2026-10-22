@@ -196,15 +196,15 @@ export function schoolClassList(school, expandAll) {
       </div>
       <div class="collapse-body" id="classBody${item.id}"${collapsed ? ' hidden' : ''}>
         <div class="table-wrap table-flat">
-          <table>
+          <table class="cards">
             <thead><tr><th>Роль</th><th>ФИО</th><th>Телефон</th><th>Действия</th></tr></thead>
             <tbody>
               ${(item.contacts || []).length ? (item.contacts || []).map((contact) => `
                 <tr>
-                  <td><span class="badge ${contact.role === 'KR' ? 'ok' : 'mute'}">${contact.role === 'KR' ? 'КР' : 'РК'}</span></td>
-                  <td>${esc(contact.name)}${contact.opted_out ? ' <span class="badge err">отписался</span>' : ''}</td>
-                  <td>${contact.phone ? `<button type="button" class="btn link" data-action="copy" data-copy="${esc(contact.phone)}">${esc(contact.phone)}</button>` : '—'}</td>
-                  <td>
+                  <td data-label="Роль"><span class="badge ${contact.role === 'KR' ? 'ok' : 'mute'}">${contact.role === 'KR' ? 'КР' : 'РК'}</span></td>
+                  <td data-label="ФИО">${esc(contact.name)}${contact.opted_out ? ' <span class="badge err">отписался</span>' : ''}</td>
+                  <td data-label="Телефон">${contact.phone ? `<button type="button" class="btn link" data-action="copy" data-copy="${esc(contact.phone)}">${esc(contact.phone)}</button>` : '—'}</td>
+                  <td data-label="Действия">
                     <button type="button" class="btn small ghost" data-action="contact-edit" data-id="${contact.id}">Изменить</button>
                     <button type="button" class="btn small danger" data-action="contact-delete" data-id="${contact.id}">Удалить</button>
                   </td>

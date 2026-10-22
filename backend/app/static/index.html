@@ -12,7 +12,15 @@
   <a class="skip" href="#main">Перейти к содержимому</a>
   <div class="app">
     <aside class="sidebar" id="sidebar" aria-label="Основная навигация">
-      <div class="logo">Школьные рассылки<small>MAX • локальный режим</small></div>
+      <div class="sidebar-head">
+        <div class="logo">
+          <span class="logo-full">Школьные рассылки<small>MAX • локальный режим</small></span>
+          <span class="logo-mini" aria-hidden="true">MAX</span>
+        </div>
+        <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-expanded="true" aria-label="Свернуть меню" title="Свернуть меню">
+          <svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+        </button>
+      </div>
       <nav class="nav">
         <button type="button" data-route="home" class="active" aria-current="page">
           <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8M5 10v10h14V10"/></svg><span class="nav-label">Обзор</span>
@@ -46,7 +54,7 @@
     <main class="main" id="main">
       <header class="topbar">
         <button type="button" class="btn icon menu-btn" id="menuBtn" aria-label="Открыть меню">
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          <svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
         <div class="titles">
           <h1 id="viewTitle">Обзор</h1>
@@ -56,7 +64,7 @@
           <span class="pill" id="maxPill" title="Состояние вкладки MAX в подключённом браузере"><span class="dot"></span>MAX: проверка</span>
           <span class="pill" id="healthPill"><span class="dot"></span>проверка</span>
           <button type="button" class="btn icon" id="themeBtn" aria-label="Переключить тему">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18a9 9 0 000-18z" fill="currentColor"/></svg>
+            <svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18a9 9 0 000-18z" fill="currentColor"/></svg>
           </button>
         </div>
       </header>
@@ -377,7 +385,7 @@
               <button type="button" class="btn small ghost" id="taskRefreshBtn">Обновить</button>
               <details class="menu" id="taskMenu">
                 <summary class="btn small ghost" aria-label="Другие действия" title="Другие действия">
-                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3"/></svg>
+                  <svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3"/></svg>
                 </summary>
                 <div class="menu-list">
                   <a class="menu-item" id="taskExportLink" href="#" target="_blank" rel="noopener">Скачать CSV</a>

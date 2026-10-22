@@ -2,7 +2,7 @@
 import { closeCampaignForm, createCampaign, deleteCampaign, deleteSelectedCampaigns, duplicateCampaign, filteredCampaigns, loadCampaigns, openCampaignForm, openCampaignMessagesDialog, openTaskMessageDialog, pickerContacts, renderCampaigns, renderPicker, setCampaignStep, startCampaign, stopCampaign } from './campaigns.js';
 import { copyToClipboard, deleteContactById, deleteSelectedContacts, editContactPhone, exportContacts, filteredContacts, loadContacts, openContactDialog, patchContact, renderContacts, toggleContactSort } from './contacts.js';
 import { $, api, debounce, qa, S, savePrefs } from './core.js';
-import { applyPrefs, applyTheme } from './dashboard.js';
+import { applyPrefs, applySidebar, applyTheme, toggleSidebarCollapsed } from './dashboard.js';
 import { previewImport, readImportFile, renderImport, resetImport, runImport } from './import.js';
 import { checkHealth, go, toggleSidebar } from './router.js';
 import { addClassToSchool, classOptions, createSchoolAndClass, deleteClass, deleteSchool, renameClass, renameSchool, renderSchoolOptions, renderSchools, toggleAllCollapsed, toggleCollapse } from './schools.js';
@@ -77,6 +77,8 @@ export function bindEvents() {
     button.addEventListener('click', () => go(button.dataset.route));
   });
   $('menuBtn').addEventListener('click', () => toggleSidebar(true));
+  $('sidebarToggle').addEventListener('click', toggleSidebarCollapsed);
+  window.addEventListener('resize', debounce(applySidebar, 150));
   $('scrim').addEventListener('click', () => toggleSidebar(false));
   $('themeBtn').addEventListener('click', () => applyTheme(S.prefs.theme === 'dark' ? 'light' : 'dark'));
 
